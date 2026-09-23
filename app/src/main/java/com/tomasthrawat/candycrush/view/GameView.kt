@@ -243,7 +243,7 @@ class GameView @JvmOverloads constructor(
             Color.rgb(17, 32, 57),
             Shader.TileMode.CLAMP
         )
-        board.reset(movesForLevel(currentLevel))
+        board.reset()
     }
 
     fun startGame() {
@@ -265,7 +265,7 @@ class GameView @JvmOverloads constructor(
         currentLevel = level.coerceAtLeast(1L)
         highestUnlockedLevel = max(highestUnlockedLevel, currentLevel)
         persistProgress()
-        board.reset(movesForLevel(currentLevel))
+        board.reset()
         selectedRow = -1
         selectedCol = -1
         gameOver = false
@@ -298,7 +298,6 @@ class GameView @JvmOverloads constructor(
         return 180 + pattern * 35
     }
 
-    private fun movesForLevel(_level: Long): Int = Int.MAX_VALUE
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)

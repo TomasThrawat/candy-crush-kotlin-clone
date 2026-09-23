@@ -49,7 +49,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         reset()
     }
 
-    fun reset(_moves: Int = 20) {
+    fun reset() {
         score = 0
         movesLeft = Int.MAX_VALUE
         pendingMatches = emptySet()
@@ -297,10 +297,6 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 board[r][c] = Candy(Random.nextInt(Candy.NUM_TYPES), r, c)
             }
         }
-    }
-
-    fun addMoves(_amount: Int) {
-        movesLeft = Int.MAX_VALUE
     }
 
     private fun compactAndRefill(): List<FallingCandy> {
