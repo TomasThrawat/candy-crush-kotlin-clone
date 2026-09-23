@@ -488,11 +488,14 @@ class GameView @JvmOverloads constructor(
 
         val scale = 1.08f
         val side = half * 2f * scale
+        val maxDimension = max(bitmap.width, bitmap.height).toFloat().coerceAtLeast(1f)
+        val bitmapWidth = side * (bitmap.width / maxDimension)
+        val bitmapHeight = side * (bitmap.height / maxDimension)
         val dst = RectF(
-            -side / 2f,
-            -side / 2f,
-            side / 2f,
-            side / 2f
+            -bitmapWidth / 2f,
+            -bitmapHeight / 2f,
+            bitmapWidth / 2f,
+            bitmapHeight / 2f
         )
         candyPaint.alpha = 255
         canvas.drawBitmap(bitmap, null, dst, candyPaint)
