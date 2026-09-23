@@ -163,6 +163,11 @@ class GameView @JvmOverloads constructor(
     private var menuPlayRect = RectF()
     private var menuShopRect = RectF()
     private var menuHelpersRect = RectF()
+    private var gameMenuRect = RectF()
+    private var gameMenuOpen = false
+    private var gameMenuRestartRect = RectF()
+    private var gameMenuMainMenuRect = RectF()
+    private var gameMenuBackRect = RectF()
     private var screenBackRect = RectF()
     private var shopHammerRect = RectF()
     private var shopCrossRect = RectF()
@@ -237,6 +242,7 @@ class GameView @JvmOverloads constructor(
 
     fun startGame() {
         screen = Screen.MENU
+        gameMenuOpen = false
         levelMapMode = false
         cancelAnimations()
         invalidate()
@@ -244,6 +250,7 @@ class GameView @JvmOverloads constructor(
 
     private fun openGame() {
         screen = Screen.GAME
+        gameMenuOpen = false
         startLevel(currentLevel)
     }
 
@@ -258,6 +265,7 @@ class GameView @JvmOverloads constructor(
         gameOver = false
         levelComplete = false
         levelMapMode = false
+        gameMenuOpen = false
         activeHelper = ActiveHelper.NONE
         levelScrollY = clampMapScroll(levelScrollY)
         invalidate()
@@ -284,10 +292,7 @@ class GameView @JvmOverloads constructor(
         return 180 + pattern * 35
     }
 
-    private fun movesForLevel(level: Long): Int {
-        val pattern = ((level - 1L) % 6L).toInt()
-        return 20 + pattern
-    }
+    private fun movesForLevel(level: Long): Int = Int.MAX_VALUE
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -354,6 +359,29 @@ class GameView @JvmOverloads constructor(
         menuPlayRect = RectF(width * 0.14f, height * 0.34f, width * 0.86f, height * 0.44f)
         menuShopRect = RectF(width * 0.14f, height * 0.47f, width * 0.86f, height * 0.57f)
         menuHelpersRect = RectF(width * 0.14f, height * 0.60f, width * 0.86f, height * 0.70f)
+
+        gameMenuRect = RectF(width - dp(72f), dp(12f), width - dp(12f), dp(52f))
+        val gameMenuBoxWidth = min(width * 0.78f, dp(330f))
+        val gameMenuCenterX = width / 2f
+        gameMenuRestartRect = RectF(
+            gameMenuCenterX - gameMenuBoxWidth / 2f,
+            height * 0.43f,
+            gameMenuCenterX + gameMenuBoxWidth / 2f,
+            height * 0.52f
+        )
+        gameMenuMainMenuRect = RectF(
+            gameMenuCenterX - gameMenuBoxWidth / 2f,
+            height * 0.55f,
+            gameMenuCenterX + gameMenuBoxWidth / 2f,
+            height * 0.64f
+        )
+        gameMenuBackRect = RectF(
+            gameMenuCenterX - gameMenuBoxWidth / 2f,
+            height * 0.67f,
+            gameMenuCenterX + gameMenuBoxWidth / 2f,
+            height * 0.75f
+        )
+
         screenBackRect = RectF(dp(12f), dp(14f), dp(104f), dp(52f))
         shopHammerRect = RectF(width * 0.10f, height * 0.24f, width * 0.90f, height * 0.34f)
         shopCrossRect = RectF(width * 0.10f, height * 0.37f, width * 0.90f, height * 0.47f)
@@ -466,6 +494,10 @@ class GameView @JvmOverloads constructor(
             drawResultOverlay(canvas)
         }
 
+        if (gameMenuOpen) {
+            drawGameMenuOverlay(canvas)
+        }
+
         canvas.restore()
     }
 
@@ -523,11 +555,26 @@ class GameView @JvmOverloads constructor(
             accentTextPaint
         )
         canvas.drawText(
-            "MOVES  " + board.movesLeft,
+            "MOVES  ∞",
             movesRect.centerX(),
             chipY + dp(18f),
             secondaryTextPaint
         )
+
+        drawGameMenuButton(canvas)
+    }
+
+    private fun drawGameMenuButton(canvas: Canvas) {
+        cardPaint.color = Color.argb(68, 255, 255, 255)
+        canvas.drawRoundRect(gameMenuRect, dp(13f), dp(13f), cardPaint)
+        val left = gameMenuRect.centerX() - dp(12f)
+        val right = gameMenuRect.centerX() + dp(12f)
+        val y1 = gameMenuRect.centerY() - dp(6f)
+        val y2 = gameMenuRect.centerY()
+        val y3 = gameMenuRect.centerY() + dp(6f)
+        canvas.drawRoundRect(left, y1, right, y1 + dp(2f), dp(1f), dp(1f), accentTextPaint)
+        canvas.drawRoundRect(left, y2, right, y2 + dp(2f), dp(1f), dp(1f), accentTextPaint)
+        canvas.drawRoundRect(left, y3, right, y3 + dp(2f), dp(1f), dp(1f), accentTextPaint)
     }
 
     private fun drawBoardPanel(canvas: Canvas) {
@@ -907,6 +954,40 @@ class GameView @JvmOverloads constructor(
         sparklePaint.alpha = 255
     }
 
+    private fun drawGameMenuOverlay(canvas: Canvas) {
+        val overlay = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(155, 8, 10, 20)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlay)
+
+        val boxWidth = min(width * 0.86f, dp(350f))
+        val box = RectF(
+            width / 2f - boxWidth / 2f,
+            height * 0.25f,
+            width / 2f + boxWidth / 2f,
+            height * 0.80f
+        )
+        cardPaint.color = Color.argb(242, 31, 35, 53)
+        canvas.drawRoundRect(box, dp(24f), dp(24f), cardPaint)
+        canvas.drawRoundRect(box, dp(24f), dp(24f), boardBorderPaint)
+
+        textPaint.textSize = dp(25f)
+        textPaint.color = Color.WHITE
+        canvas.drawText("GAME MENU", box.centerX(), box.top + dp(54f), textPaint)
+
+        secondaryTextPaint.textSize = dp(12f)
+        canvas.drawText(
+            "Restart this level or return to the main menu.",
+            box.centerX(),
+            box.top + dp(80f),
+            secondaryTextPaint
+        )
+
+        drawMenuButton(canvas, gameMenuRestartRect, "RESTART")
+        drawMenuButton(canvas, gameMenuMainMenuRect, "MAIN MENU")
+        drawMenuButton(canvas, gameMenuBackRect, "CONTINUE")
+    }
+
     private fun drawResultOverlay(canvas: Canvas) {
         val overlay = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(125, 8, 10, 20)
@@ -1002,7 +1083,7 @@ class GameView @JvmOverloads constructor(
 
         drawShopItem(canvas, shopHammerRect, "HAMMER", "Remove one candy", 40, helperCounts[0])
         drawShopItem(canvas, shopCrossRect, "CROSS BLAST", "Clear row + column", 60, helperCounts[1])
-        drawShopItem(canvas, shopMovesRect, "+5 MOVES", "Add five moves", 80, helperCounts[2])
+        drawShopItem(canvas, shopMovesRect, "UNLIMITED MOVES", "Moves never run out", 0, Int.MAX_VALUE)
 
         cardPaint.color = Color.argb(70, 255, 255, 255)
         canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
@@ -1054,7 +1135,7 @@ class GameView @JvmOverloads constructor(
 
         drawHelperInfo(canvas, dp(105f), "HAMMER", "Tap it, then tap one candy", "x" + helperCounts[0])
         drawHelperInfo(canvas, dp(200f), "CROSS BLAST", "Tap it, then choose a candy", "x" + helperCounts[1])
-        drawHelperInfo(canvas, dp(295f), "+5 MOVES", "Adds five moves immediately", "x" + helperCounts[2])
+        drawHelperInfo(canvas, dp(295f), "MOVES", "Unlimited moves are always available", "∞")
 
         accentTextPaint.textSize = dp(14f)
         canvas.drawText(
@@ -1118,7 +1199,7 @@ class GameView @JvmOverloads constructor(
 
             secondaryTextPaint.textSize = dp(10f)
             canvas.drawText(
-                "x" + count,
+                if (title == "MOVES") "∞" else "x" + count,
                 rect.centerX(),
                 rect.bottom - dp(9f),
                 secondaryTextPaint
@@ -1139,8 +1220,8 @@ class GameView @JvmOverloads constructor(
         )
         drawButton(
             helperMoveRect,
-            "+5 MOVES",
-            helperCounts[2],
+            "MOVES",
+            Int.MAX_VALUE,
             false
         )
 
@@ -1940,6 +2021,37 @@ class GameView @JvmOverloads constructor(
                 gestureStartRow = -1
                 gestureStartCol = -1
 
+                if (isTap && gameMenuOpen) {
+                    when {
+                        gameMenuRestartRect.contains(event.x, event.y) -> {
+                            gameMenuOpen = false
+                            startLevel(currentLevel)
+                        }
+                        gameMenuMainMenuRect.contains(event.x, event.y) -> {
+                            gameMenuOpen = false
+                            cancelAnimations()
+                            screen = Screen.MENU
+                            levelMapMode = false
+                            activeHelper = ActiveHelper.NONE
+                            invalidate()
+                        }
+                        gameMenuBackRect.contains(event.x, event.y) -> {
+                            gameMenuOpen = false
+                            invalidate()
+                        }
+                    }
+                    return true
+                }
+
+                if (isTap && gameMenuRect.contains(event.x, event.y)) {
+                    gameMenuOpen = true
+                    activeHelper = ActiveHelper.NONE
+                    selectedRow = -1
+                    selectedCol = -1
+                    invalidate()
+                    return true
+                }
+
                 if (helperHammerRect.contains(event.x, event.y) && isTap) {
                     activateOrToggleHelper(ActiveHelper.HAMMER)
                     return true
@@ -1949,7 +2061,7 @@ class GameView @JvmOverloads constructor(
                     return true
                 }
                 if (helperMoveRect.contains(event.x, event.y) && isTap) {
-                    useExtraMoveHelper()
+                    invalidate()
                     return true
                 }
 
@@ -2080,15 +2192,6 @@ class GameView @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun useExtraMoveHelper() {
-        if (helperCounts[2] <= 0) return
-        helperCounts[2]--
-        board.addMoves(5)
-        persistInventory()
-        activeHelper = ActiveHelper.NONE
-        invalidate()
-    }
-
     private fun useActiveHelper(row: Int, col: Int) {
         val falling = when (activeHelper) {
             ActiveHelper.HAMMER -> {
@@ -2147,7 +2250,7 @@ class GameView @JvmOverloads constructor(
         when {
             shopHammerRect.contains(event.x, event.y) -> buyHelper(0, 40)
             shopCrossRect.contains(event.x, event.y) -> buyHelper(1, 60)
-            shopMovesRect.contains(event.x, event.y) -> buyHelper(2, 80)
+            shopMovesRect.contains(event.x, event.y) -> invalidate()
         }
         return true
     }

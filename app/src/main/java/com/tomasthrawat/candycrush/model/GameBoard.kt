@@ -37,7 +37,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     var score: Int = 0
         private set
 
-    var movesLeft: Int = 20
+    var movesLeft: Int = Int.MAX_VALUE
         private set
 
     private var pendingMatches: Set<Pair<Int, Int>> = emptySet()
@@ -51,7 +51,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     fun reset(moves: Int = 20) {
         score = 0
-        movesLeft = moves.coerceAtLeast(1)
+        movesLeft = Int.MAX_VALUE
         pendingMatches = emptySet()
         pendingSpecialCell = null
         pendingSpecialType = -1
@@ -94,7 +94,6 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             return false
         }
 
-        movesLeft--
         pendingMatches = matches
 
         val special = chooseSpecial(matches, r2, c2)
@@ -133,7 +132,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         pendingSpecialType = -1
         pendingSpecialDirection = 0
 
-        score += matches.size * 10
+        score += matches.size * 30
 
         if (specialCell != null && specialType >= 0) {
             for ((r, c) in matches) {
@@ -189,7 +188,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             }
         }
 
-        score += affectedCount * 8
+        score += affectedCount * 24
 
         return BombDetonation(
             explosionCells = explosionCells,
@@ -230,7 +229,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         val affectedCount = if (board[targetRow][targetCol] != null) 1 else 0
         board[startRow][startCol] = null
         board[targetRow][targetCol] = null
-        score += 45
+        score += 135
 
         return RocketLaunch(
             startCell = startRow to startCol,
@@ -244,7 +243,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         if (row !in 0 until rows || col !in 0 until cols) return emptyList()
         if (board[row][col] == null) return emptyList()
         board[row][col] = null
-        score += 15
+        score += 45
         return compactAndRefill()
     }
 
@@ -263,7 +262,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 cleared++
             }
         }
-        score += cleared * 4
+        score += cleared * 12
         return compactAndRefill()
     }
 
@@ -301,7 +300,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     }
 
     fun addMoves(amount: Int) {
-        movesLeft += amount.coerceAtLeast(0)
+        movesLeft = Int.MAX_VALUE
     }
 
     private fun compactAndRefill(): List<FallingCandy> {
@@ -484,5 +483,5 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         return result
     }
 
-    fun isGameOver(): Boolean = movesLeft <= 0
+    fun isGameOver(): Boolean = false
 }
