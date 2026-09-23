@@ -4,8 +4,11 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.RectF
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -79,7 +82,19 @@ class GameView @JvmOverloads constructor(
             android.graphics.Typeface.BOLD
         )
     }
-    private val candyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val candyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
+        isDither = true
+    }
+    private val referenceCandyBitmaps = arrayOf(
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_0),
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_1),
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_2),
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_3),
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_4),
+        BitmapFactory.decodeResource(resources, R.drawable.candy_ref_5)
+    )
+
     private val candyHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(105, 255, 255, 255)
     }
@@ -111,14 +126,14 @@ class GameView @JvmOverloads constructor(
         color = Color.argb(230, 16, 22, 41)
     }
 
-    // Cozy family palette: ivory, sky blue, warm gold, peach cream, powder blue, and honey.
+    // Palette follows the dominant colors present in the reference artwork.
     private val palette = intArrayOf(
-        Color.rgb(255, 248, 232),
-        Color.rgb(157, 211, 247),
-        Color.rgb(244, 201, 93),
-        Color.rgb(255, 216, 173),
-        Color.rgb(195, 225, 248),
-        Color.rgb(232, 202, 137)
+        Color.rgb(195, 51, 134),
+        Color.rgb(76, 166, 163),
+        Color.rgb(71, 128, 168),
+        Color.rgb(242, 163, 111),
+        Color.rgb(85, 219, 75),
+        Color.rgb(248, 229, 102)
     )
 
     private var boardLeft = 0f
@@ -459,22 +474,29 @@ class GameView @JvmOverloads constructor(
             return
         }
 
-        when (type) {
-            0 -> drawWrappedCandy(canvas, half, palette[type])
-            1 -> drawGlossyRoundCandy(canvas, half, palette[type])
-            2 -> drawGemCandy(canvas, half, palette[type])
-            3 -> drawHexCandy(canvas, half, palette[type])
-            4 -> drawSwirlCandy(canvas, half, palette[type])
-            else -> drawPillCandy(canvas, half, palette[type])
-        }
-
-        drawCandyHighlight(canvas, half)
+        drawReferenceCandy(canvas, type, half)
 
         if (selected) {
             canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
         }
 
         canvas.restore()
+    }
+
+    private fun drawReferenceCandy(canvas: Canvas, type: Int, half: Float) {
+        val bitmap = referenceCandyBitmaps.getOrNull(type) ?: return
+        if (bitmap.isRecycled) return
+
+        val scale = 1.08f
+        val side = half * 2f * scale
+        val dst = RectF(
+            -side / 2f,
+            -side / 2f,
+            side / 2f,
+            side / 2f
+        )
+        candyPaint.alpha = 255
+        canvas.drawBitmap(bitmap, null, dst, candyPaint)
     }
 
     private fun drawWrappedCandy(canvas: Canvas, half: Float, color: Int) {
