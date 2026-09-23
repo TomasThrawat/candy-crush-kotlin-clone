@@ -25,22 +25,25 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         // re-roll any pre-existing matches
         var safety = 0
         while (findMatches().isNotEmpty() && safety++ < 200) {
-            for (m in findMatches()) board[m.row][m.col] =
-                Candy(Random.nextInt(Candy.NUM_TYPES), m.row, m.col)
+            for (m in findMatches()) {
+                board[m.row][m.col] = Candy(Random.nextInt(Candy.NUM_TYPES), m.row, m.col)
+            }
         }
     }
 
     fun get(row: Int, col: Int): Candy? = board[row][col]
 
-    private fun set(row: Int, col: Int, candy: Candy?) { board[row][candy?.row ?: row] = candy?.copy(row = row) }
+    private fun set(row: Int, col: Int, candy: Candy?) {
+        board[row][col] = candy?.let { Candy(it.type, row, col) }
+    }
 
     /** Try to swap (r1,c1) and (r2,c2). Returns true if a match resulted. */
     fun swap(r1: Int, c1: Int, r2: Int, c2: Int): Boolean {
         if (!isAdjacent(r1, c1, r2, c2)) return false
         val a = board[r1][c1] ?: return false
         val b = board[r2][c2] ?: return false
-        board[r1][c1] = b.copy(row = r1, col = c1)
-        board[r2][c2] = a.copy(row = r2, col = c2)
+        board[r1][c1] = Candy(b.type, r1, c1)
+        board[r2][c2] = Candy(a.type, r2, c2)
 
         val matches = findMatches()
         if (matches.isEmpty()) {
@@ -110,7 +113,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             for (r in rows - 1 downTo 0) {
                 val cell = board[r][c]
                 if (cell != null) {
-                    board[write][c] = cell.copy(row = write)
+                    board[write][c] = Candy(cell.type, write, c)
                     if (write != r) board[r][c] = null
                     write--
                 }
