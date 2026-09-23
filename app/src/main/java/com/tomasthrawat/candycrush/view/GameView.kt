@@ -11,23 +11,34 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
-import android.util.AttributeSet
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
+import android.widget.OverScroller
 import com.tomasthrawat.candycrush.model.GameBoard
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 class GameView @JvmOverloads constructor(
     context: Context,
-    attrs: AttributeSet? = null
+    attrs: android.util.AttributeSet? = null
 ) : View(context, attrs) {
 
     private val board = GameBoard(8, 8)
     private val sound = GameSoundManager(context.applicationContext)
+    private val preferences = context.applicationContext
+        .getSharedPreferences("candy_rush_progress", Context.MODE_PRIVATE)
+    private val levelScroller = OverScroller(context)
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val minimumFlingVelocity = ViewConfiguration.get(context).scaledMinimumFlingVelocity
 
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -82,6 +93,20 @@ class GameView @JvmOverloads constructor(
     private val sparklePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
     }
+    private val levelRoutePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(5f)
+        strokeCap = Paint.Cap.ROUND
+        color = Color.argb(90, 255, 255, 255)
+    }
+    private val levelNodePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val levelNodeBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2f)
+    }
+    private val mapHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(230, 16, 22, 41)
+    }
 
     private val palette = intArrayOf(
         Color.rgb(255, 78, 89),
@@ -98,6 +123,7 @@ class GameView @JvmOverloads constructor(
     private var cellSize = 0f
     private var gap = 0f
     private var headerHeight = 0f
+    private var levelChipRect = RectF()
 
     private var selectedRow = -1
     private var selectedCol = -1
@@ -115,9 +141,23 @@ class GameView @JvmOverloads constructor(
 
     private var successPulse = 0f
     private var gameOver = false
+    private var levelComplete = false
+
+    private var currentLevel = preferences.getLong("current_level", 1L).coerceAtLeast(1L)
+    private var highestUnlockedLevel =
+        preferences.getLong("highest_unlocked_level", 1L).coerceAtLeast(1L)
+    private var levelMapMode = false
+
+    private var levelScrollY = 0
+    private var mapDownX = 0f
+    private var mapDownY = 0f
+    private var mapLastY = 0f
+    private var mapDragging = false
+    private var mapVelocityTracker: VelocityTracker? = null
 
     init {
         isClickable = true
+        overScrollMode = OVER_SCROLL_NEVER
         backgroundPaint.shader = LinearGradient(
             0f,
             0f,
@@ -127,30 +167,58 @@ class GameView @JvmOverloads constructor(
             Color.rgb(17, 32, 57),
             Shader.TileMode.CLAMP
         )
+        board.reset(movesForLevel(currentLevel))
     }
 
     fun startGame() {
+        startLevel(currentLevel)
+    }
+
+    private fun startLevel(level: Long) {
         cancelAnimations()
-        board.reset()
+        currentLevel = level.coerceAtLeast(1L)
+        highestUnlockedLevel = max(highestUnlockedLevel, currentLevel)
+        persistProgress()
+        board.reset(movesForLevel(currentLevel))
         selectedRow = -1
         selectedCol = -1
         gameOver = false
+        levelComplete = false
+        levelMapMode = false
+        levelScrollY = clampMapScroll(levelScrollY)
         invalidate()
+    }
+
+    private fun persistProgress() {
+        preferences.edit()
+            .putLong("current_level", currentLevel)
+            .putLong("highest_unlocked_level", highestUnlockedLevel)
+            .apply()
+    }
+
+    private fun targetScoreForLevel(level: Long): Int {
+        val pattern = ((level - 1L) % 12L).toInt()
+        return 180 + pattern * 35
+    }
+
+    private fun movesForLevel(level: Long): Int {
+        val pattern = ((level - 1L) % 6L).toInt()
+        return 20 + pattern
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
 
-        headerHeight = dp(92f)
+        headerHeight = dp(124f)
 
         val horizontalPadding = dp(10f)
         val bottomPadding = dp(12f)
-        val availableWidth = w - (horizontalPadding * 2f)
+        val availableWidth = w - horizontalPadding * 2f
         val availableHeight = h - headerHeight - bottomPadding - dp(8f)
 
         boardSize = min(availableWidth, availableHeight).coerceAtLeast(0f)
         boardLeft = (w - boardSize) / 2f
-        boardTop = headerHeight + maxOf(
+        boardTop = headerHeight + max(
             dp(6f),
             (availableHeight - boardSize) / 2f
         )
@@ -174,7 +242,22 @@ class GameView @JvmOverloads constructor(
 
         textPaint.textSize = dp(25f)
         secondaryTextPaint.textSize = dp(13f)
-        accentTextPaint.textSize = dp(19f)
+        accentTextPaint.textSize = dp(18f)
+        levelChipRect = RectF(
+            width / 2f - dp(86f),
+            dp(59f),
+            width / 2f + dp(86f),
+            dp(84f)
+        )
+        levelScrollY = clampMapScroll(levelScrollY)
+    }
+
+    override fun computeScroll() {
+        super.computeScroll()
+        if (levelScroller.computeScrollOffset()) {
+            levelScrollY = clampMapScroll(levelScroller.currY)
+            invalidate()
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -187,6 +270,11 @@ class GameView @JvmOverloads constructor(
             height.toFloat(),
             backgroundPaint
         )
+
+        if (levelMapMode) {
+            drawLevelMap(canvas)
+            return
+        }
 
         drawHeader(canvas)
         drawBoardPanel(canvas)
@@ -228,24 +316,39 @@ class GameView @JvmOverloads constructor(
             drawSparkles(canvas, successPulse)
         }
 
-        if (gameOver) {
-            drawGameOver(canvas)
+        if (gameOver || levelComplete) {
+            drawResultOverlay(canvas)
         }
     }
 
     private fun drawHeader(canvas: Canvas) {
         canvas.drawText("CANDY RUSH", width / 2f, dp(33f), textPaint)
 
-        val subtitle = if (gameOver) {
-            "Tap anywhere to start a new round"
-        } else {
-            "Tap a candy, then tap an adjacent one"
+        val subtitle = when {
+            levelComplete -> "Level cleared!"
+            gameOver -> "Out of moves"
+            else -> "Tap a candy, then tap an adjacent one"
         }
-        canvas.drawText(subtitle, width / 2f, dp(56f), secondaryTextPaint)
+        canvas.drawText(subtitle, width / 2f, dp(55f), secondaryTextPaint)
+
+        val chipRadius = dp(13f)
+        cardPaint.color = Color.argb(58, 255, 255, 255)
+        canvas.drawRoundRect(
+            levelChipRect,
+            chipRadius,
+            chipRadius,
+            cardPaint
+        )
+        canvas.drawText(
+            "LEVEL " + currentLevel + "  •  TARGET " + targetScoreForLevel(currentLevel),
+            levelChipRect.centerX(),
+            dp(77f),
+            accentTextPaint
+        )
 
         val chipWidth = dp(128f)
         val chipHeight = dp(25f)
-        val chipY = dp(66f)
+        val chipY = dp(92f)
         val radius = chipHeight / 2f
 
         val scoreRect = RectF(
@@ -266,13 +369,13 @@ class GameView @JvmOverloads constructor(
         canvas.drawRoundRect(movesRect, radius, radius, cardPaint)
 
         canvas.drawText(
-            "SCORE  ${board.score}",
+            "SCORE  " + board.score,
             scoreRect.centerX(),
             chipY + dp(18f),
             accentTextPaint
         )
         canvas.drawText(
-            "MOVES  ${board.movesLeft}",
+            "MOVES  " + board.movesLeft,
             movesRect.centerX(),
             chipY + dp(18f),
             secondaryTextPaint
@@ -306,16 +409,13 @@ class GameView @JvmOverloads constructor(
         canvas.save()
         canvas.translate(centerX, centerY)
 
-        if (type == 2) {
-            canvas.rotate(45f)
-        }
-
         val rect = RectF(-half, -half, half, half)
         candyPaint.color = palette[type % palette.size]
         candyPaint.shader = null
 
         when (type) {
             1, 4, 5 -> canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
+            2 -> canvas.drawPath(diamondPath(half * 0.96f), candyPaint)
             3 -> canvas.drawPath(hexagonPath(half * 0.94f), candyPaint)
             else -> canvas.drawRoundRect(
                 rect,
@@ -325,22 +425,11 @@ class GameView @JvmOverloads constructor(
             )
         }
 
-        if (type == 2) {
-            canvas.rotate(-45f)
-        }
-
         candyEdgePaint.color = Color.argb(100, 255, 255, 255)
         when (type) {
-            1, 4, 5 -> canvas.drawCircle(
-                0f,
-                0f,
-                half * 0.92f,
-                candyEdgePaint
-            )
-            3 -> canvas.drawPath(
-                hexagonPath(half * 0.94f),
-                candyEdgePaint
-            )
+            1, 4, 5 -> canvas.drawCircle(0f, 0f, half * 0.92f, candyEdgePaint)
+            2 -> canvas.drawPath(diamondPath(half * 0.96f), candyEdgePaint)
+            3 -> canvas.drawPath(hexagonPath(half * 0.94f), candyEdgePaint)
             else -> canvas.drawRoundRect(
                 rect,
                 half * 0.26f,
@@ -366,18 +455,25 @@ class GameView @JvmOverloads constructor(
         canvas.drawPath(glint, candyEdgePaint)
 
         if (selected) {
-            val selectionRect = RectF(
-                -half - dp(4f),
-                -half - dp(4f),
-                half + dp(4f),
-                half + dp(4f)
-            )
-            canvas.drawRoundRect(
-                selectionRect,
-                dp(10f),
-                dp(10f),
-                selectionPaint
-            )
+            when (type) {
+                2 -> canvas.drawPath(diamondPath(half + dp(4f)), selectionPaint)
+                3 -> canvas.drawPath(hexagonPath(half + dp(4f)), selectionPaint)
+                1, 4, 5 -> canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
+                else -> {
+                    val selectionRect = RectF(
+                        -half - dp(4f),
+                        -half - dp(4f),
+                        half + dp(4f),
+                        half + dp(4f)
+                    )
+                    canvas.drawRoundRect(
+                        selectionRect,
+                        dp(10f),
+                        dp(10f),
+                        selectionPaint
+                    )
+                }
+            }
         }
 
         canvas.restore()
@@ -413,40 +509,299 @@ class GameView @JvmOverloads constructor(
         sparklePaint.alpha = 255
     }
 
-    private fun drawGameOver(canvas: Canvas) {
+    private fun drawResultOverlay(canvas: Canvas) {
         val overlay = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(125, 8, 10, 20)
         }
-        canvas.drawRect(
-            0f,
-            headerHeight,
-            width.toFloat(),
-            height.toFloat(),
-            overlay
-        )
+        canvas.drawRect(0f, headerHeight, width.toFloat(), height.toFloat(), overlay)
 
         val box = RectF(
-            width / 2f - dp(135f),
-            boardTop + boardSize / 2f - dp(58f),
-            width / 2f + dp(135f),
-            boardTop + boardSize / 2f + dp(58f)
+            width / 2f - dp(145f),
+            boardTop + boardSize / 2f - dp(68f),
+            width / 2f + dp(145f),
+            boardTop + boardSize / 2f + dp(68f)
         )
-        cardPaint.color = Color.argb(235, 31, 35, 53)
+        cardPaint.color = Color.argb(238, 31, 35, 53)
         canvas.drawRoundRect(box, dp(22f), dp(22f), cardPaint)
         canvas.drawRoundRect(box, dp(22f), dp(22f), boardBorderPaint)
 
+        val title = if (levelComplete) {
+            "LEVEL " + currentLevel + " COMPLETE"
+        } else {
+            "ROUND OVER"
+        }
+        val action = if (levelComplete) {
+            "Tap to play level " + (currentLevel + 1L)
+        } else {
+            "Tap to retry level " + currentLevel
+        }
+
+        canvas.drawText(title, box.centerX(), box.centerY() - dp(14f), textPaint)
+        canvas.drawText(action, box.centerX(), box.centerY() + dp(18f), secondaryTextPaint)
+    }
+
+    private fun drawLevelMap(canvas: Canvas) {
+        val maxVisibleLevel = highestUnlockedLevel + 6L
+        val firstVisible = firstMapLevel(maxVisibleLevel)
+        val lastVisible = lastMapLevel(maxVisibleLevel)
+
+        canvas.save()
+        canvas.clipRect(0f, mapHeaderHeight(), width.toFloat(), height.toFloat())
+        canvas.translate(0f, -levelScrollY.toFloat())
+
+        for (level in firstVisible..lastVisible) {
+            if (level < lastVisible) {
+                val start = levelNodeCenter(level)
+                val end = levelNodeCenter(level + 1L)
+                levelRoutePaint.color = if (level < highestUnlockedLevel) {
+                    Color.argb(150, 255, 211, 79)
+                } else {
+                    Color.argb(85, 255, 255, 255)
+                }
+                canvas.drawLine(start.first, start.second, end.first, end.second, levelRoutePaint)
+            }
+        }
+
+        for (level in firstVisible..lastVisible) {
+            val center = levelNodeCenter(level)
+            val unlocked = level <= highestUnlockedLevel
+            val current = level == currentLevel
+            val radius = if (current) dp(27f) else dp(23f)
+
+            levelNodePaint.color = when {
+                current -> Color.rgb(255, 202, 64)
+                unlocked -> Color.rgb(74, 91, 150)
+                else -> Color.rgb(38, 44, 66)
+            }
+            canvas.drawCircle(center.first, center.second, radius, levelNodePaint)
+
+            levelNodeBorderPaint.color = when {
+                current -> Color.WHITE
+                unlocked -> Color.argb(190, 255, 255, 255)
+                else -> Color.argb(75, 255, 255, 255)
+            }
+            canvas.drawCircle(center.first, center.second, radius, levelNodeBorderPaint)
+
+            textPaint.textSize = if (level >= 1000L) dp(11f) else dp(14f)
+            textPaint.color = if (unlocked || current) Color.WHITE else Color.argb(110, 255, 255, 255)
+            canvas.drawText(level.toString(), center.first, center.second + dp(5f), textPaint)
+
+            if (current) {
+                secondaryTextPaint.textSize = dp(11f)
+                canvas.drawText(
+                    "CURRENT",
+                    center.first,
+                    center.second + radius + dp(16f),
+                    secondaryTextPaint
+                )
+            }
+        }
+
+        canvas.restore()
+        drawMapHeader(canvas, maxVisibleLevel)
+    }
+
+    private fun drawMapHeader(canvas: Canvas, maxVisibleLevel: Long) {
+        val headerBottom = mapHeaderHeight()
+        canvas.drawRect(0f, 0f, width.toFloat(), headerBottom, mapHeaderPaint)
+
+        val backRect = RectF(dp(10f), dp(12f), dp(92f), dp(42f))
+        cardPaint.color = Color.argb(60, 255, 255, 255)
+        canvas.drawRoundRect(backRect, dp(15f), dp(15f), cardPaint)
+        secondaryTextPaint.textSize = dp(13f)
+        canvas.drawText("BACK", backRect.centerX(), dp(32f), secondaryTextPaint)
+
+        textPaint.textSize = dp(23f)
+        textPaint.color = Color.WHITE
+        canvas.drawText("LEVEL MAP", width / 2f, dp(34f), textPaint)
+
+        secondaryTextPaint.textSize = dp(12f)
         canvas.drawText(
-            "ROUND OVER",
-            box.centerX(),
-            box.centerY() - dp(12f),
-            textPaint
-        )
-        canvas.drawText(
-            "Tap to play again",
-            box.centerX(),
-            box.centerY() + dp(18f),
+            "Swipe up/down • Tap an unlocked level",
+            width / 2f,
+            dp(55f),
             secondaryTextPaint
         )
+
+        accentTextPaint.textSize = dp(14f)
+        canvas.drawText(
+            "UNLOCKED " + highestUnlockedLevel + "   •   VIEWING TO " + maxVisibleLevel,
+            width / 2f,
+            dp(77f),
+            accentTextPaint
+        )
+    }
+
+    private fun mapHeaderHeight(): Float = dp(92f)
+
+    private fun mapRowHeight(): Float = dp(105f)
+
+    private fun levelNodeCenter(level: Long): Pair<Float, Float> {
+        val zeroBased = level - 1L
+        val row = zeroBased / 3L
+        val rawColumn = (zeroBased % 3L).toInt()
+        val column = if (row % 2L == 0L) rawColumn else 2 - rawColumn
+
+        val x = width * when (column) {
+            0 -> 0.22f
+            1 -> 0.50f
+            else -> 0.78f
+        }
+        val y = mapHeaderHeight() + dp(48f) + row * mapRowHeight()
+        return Pair(x, y)
+    }
+
+    private fun firstMapLevel(maxLevel: Long): Long {
+        val row = floor(
+            (levelScrollY.toFloat() - mapHeaderHeight() - mapRowHeight() * 1.5f) / mapRowHeight()
+        ).toLong()
+        return max(1L, row * 3L + 1L).coerceAtMost(maxLevel)
+    }
+
+    private fun lastMapLevel(maxLevel: Long): Long {
+        val bottom = levelScrollY + height
+        val row = ceil(
+            (bottom - mapHeaderHeight() + mapRowHeight()) / mapRowHeight()
+        ).toLong()
+        return max(1L, min(maxLevel, row.coerceAtLeast(0L) * 3L + 3L))
+    }
+
+    private fun mapContentHeight(maxLevel: Long): Int {
+        val lastY = levelNodeCenter(maxLevel).second
+        return max(height, (lastY + dp(100f)).toInt())
+    }
+
+    private fun maxMapScroll(): Int {
+        val maxLevel = highestUnlockedLevel + 6L
+        return max(0, mapContentHeight(maxLevel) - height)
+    }
+
+    private fun clampMapScroll(value: Int): Int = value.coerceIn(0, maxMapScroll())
+
+    private fun openLevelMap() {
+        cancelAnimations()
+        levelMapMode = true
+
+        val desired = (levelNodeCenter(currentLevel).second - height * 0.48f).toInt()
+        val target = clampMapScroll(desired)
+
+        levelScroller.forceFinished(true)
+        levelScrollY = target
+        invalidate()
+    }
+
+    private fun closeLevelMap() {
+        levelScroller.forceFinished(true)
+        levelMapMode = false
+        levelScrollY = clampMapScroll(levelScrollY)
+        invalidate()
+    }
+
+    private fun scrollMapBy(deltaY: Float) {
+        val next = clampMapScroll(levelScrollY + deltaY.toInt())
+        if (next != levelScrollY) {
+            levelScrollY = next
+            invalidate()
+        }
+    }
+
+    private fun hitLevelAt(x: Float, y: Float): Long? {
+        val maxLevel = highestUnlockedLevel + 6L
+        val first = firstMapLevel(maxLevel)
+        val last = lastMapLevel(maxLevel)
+        val contentY = y + levelScrollY
+
+        var nearestLevel: Long? = null
+        var nearestDistance = Float.MAX_VALUE
+
+        for (level in first..last) {
+            val center = levelNodeCenter(level)
+            val dx = center.first - x
+            val dy = center.second - contentY
+            val distance = sqrt(dx * dx + dy * dy)
+            if (distance <= dp(31f) && distance < nearestDistance) {
+                nearestLevel = level
+                nearestDistance = distance
+            }
+        }
+
+        return nearestLevel
+    }
+
+    private fun onMapTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                levelScroller.forceFinished(true)
+                mapVelocityTracker?.recycle()
+                mapVelocityTracker = VelocityTracker.obtain().also { it.addMovement(event) }
+                mapDownX = event.x
+                mapDownY = event.y
+                mapLastY = event.y
+                mapDragging = false
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                mapVelocityTracker?.addMovement(event)
+                val dy = event.y - mapLastY
+
+                if (!mapDragging) {
+                    val moved = abs(event.x - mapDownX) > touchSlop ||
+                        abs(event.y - mapDownY) > touchSlop
+                    if (moved) mapDragging = true
+                }
+
+                if (mapDragging) {
+                    scrollMapBy(-dy)
+                    mapLastY = event.y
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                mapVelocityTracker?.addMovement(event)
+                mapVelocityTracker?.computeCurrentVelocity(1000)
+                val velocityY = mapVelocityTracker?.yVelocity ?: 0f
+
+                if (!mapDragging) {
+                    val backRect = RectF(dp(10f), dp(12f), dp(92f), dp(42f))
+                    if (backRect.contains(event.x, event.y)) {
+                        closeLevelMap()
+                    } else if (event.y >= mapHeaderHeight()) {
+                        val tappedLevel = hitLevelAt(event.x, event.y)
+                        if (tappedLevel != null && tappedLevel <= highestUnlockedLevel) {
+                            startLevel(tappedLevel)
+                        }
+                    }
+                } else if (abs(velocityY) >= minimumFlingVelocity) {
+                    levelScroller.fling(
+                        0,
+                        levelScrollY,
+                        0,
+                        -velocityY.toInt(),
+                        0,
+                        0,
+                        0,
+                        maxMapScroll()
+                    )
+                    invalidate()
+                }
+
+                mapVelocityTracker?.recycle()
+                mapVelocityTracker = null
+                mapDragging = false
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                mapVelocityTracker?.recycle()
+                mapVelocityTracker = null
+                mapDragging = false
+                return true
+            }
+
+            else -> return true
+        }
     }
 
     private fun beginSwap(r1: Int, c1: Int, r2: Int, c2: Int) {
@@ -487,23 +842,19 @@ class GameView @JvmOverloads constructor(
                     }
                 }
             })
-
             start()
         }
     }
 
     private fun startReverseSwap() {
         swapAnimator?.cancel()
-
         swapAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
             duration = 125L
             interpolator = DecelerateInterpolator()
-
             addUpdateListener {
                 swapProgress = it.animatedValue as Float
                 invalidate()
             }
-
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     swapProgress = 0f
@@ -512,7 +863,6 @@ class GameView @JvmOverloads constructor(
                     invalidate()
                 }
             })
-
             start()
         }
     }
@@ -521,35 +871,48 @@ class GameView @JvmOverloads constructor(
         successAnimator?.cancel()
         successAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
             duration = 220L
-
             addUpdateListener {
                 successPulse = it.animatedValue as Float
                 invalidate()
             }
-
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     successPulse = 0f
                     clearMovingState()
-                    if (board.isGameOver()) {
+
+                    if (board.score >= targetScoreForLevel(currentLevel)) {
+                        levelComplete = true
+                        highestUnlockedLevel = max(highestUnlockedLevel, currentLevel + 1L)
+                        persistProgress()
+                    } else if (board.isGameOver()) {
                         gameOver = true
                     }
+
                     invalidate()
                 }
             })
-
             start()
         }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action != MotionEvent.ACTION_DOWN) return true
-        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) {
+        if (levelMapMode) return onMapTouch(event)
+
+        if (event.actionMasked != MotionEvent.ACTION_DOWN) return true
+        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) return true
+
+        if (levelChipRect.contains(event.x, event.y)) {
+            openLevelMap()
             return true
         }
 
         if (gameOver) {
-            startGame()
+            startLevel(currentLevel)
+            return true
+        }
+
+        if (levelComplete) {
+            startLevel(currentLevel + 1L)
             return true
         }
 
@@ -557,25 +920,16 @@ class GameView @JvmOverloads constructor(
 
         val dx = event.x - boardLeft
         val dy = event.y - boardTop
-
-        if (dx < 0f || dy < 0f || dx > boardSize || dy > boardSize) {
-            return true
-        }
+        if (dx < 0f || dy < 0f || dx > boardSize || dy > boardSize) return true
 
         val step = cellSize + gap
         val col = (dx / step).toInt()
         val row = (dy / step).toInt()
-
-        if (row !in 0 until board.rows || col !in 0 until board.cols) {
-            return true
-        }
+        if (row !in 0 until board.rows || col !in 0 until board.cols) return true
 
         val cellLeft = col * step
         val cellTop = row * step
-
-        if (dx > cellLeft + cellSize || dy > cellTop + cellSize) {
-            return true
-        }
+        if (dx > cellLeft + cellSize || dy > cellTop + cellSize) return true
 
         if (selectedRow == -1) {
             selectedRow = row
@@ -589,9 +943,8 @@ class GameView @JvmOverloads constructor(
                 selectedCol = -1
             } else {
                 val adjacent = abs(fromRow - row) + abs(fromCol - col) == 1
-                if (adjacent) {
-                    beginSwap(fromRow, fromCol, row, col)
-                } else {
+                if (adjacent) beginSwap(fromRow, fromCol, row, col)
+                else {
                     selectedRow = row
                     selectedCol = col
                 }
@@ -604,6 +957,9 @@ class GameView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         cancelAnimations()
+        levelScroller.forceFinished(true)
+        mapVelocityTracker?.recycle()
+        mapVelocityTracker = null
         sound.release()
         super.onDetachedFromWindow()
     }
@@ -638,34 +994,34 @@ class GameView @JvmOverloads constructor(
         )
     }
 
+    private fun diamondPath(radius: Float): Path {
+        return Path().apply {
+            moveTo(0f, -radius)
+            lineTo(radius, 0f)
+            lineTo(0f, radius)
+            lineTo(-radius, 0f)
+            close()
+        }
+    }
+
     private fun hexagonPath(radius: Float): Path {
         val path = Path()
-
         repeat(6) { i ->
             val angle = Math.toRadians((60 * i - 30).toDouble())
             val x = cos(angle).toFloat() * radius
             val y = sin(angle).toFloat() * radius
-
-            if (i == 0) {
-                path.moveTo(x, y)
-            } else {
-                path.lineTo(x, y)
-            }
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-
         path.close()
         return path
     }
 
-    private fun easeInOut(value: Float): Float {
-        return (value * value * (3f - 2f * value)).coerceIn(0f, 1f)
-    }
+    private fun easeInOut(value: Float): Float =
+        (value * value * (3f - 2f * value)).coerceIn(0f, 1f)
 
-    private fun lerp(a: Float, b: Float, t: Float): Float {
-        return a + (b - a) * t
-    }
+    private fun lerp(a: Float, b: Float, t: Float): Float =
+        a + (b - a) * t
 
-    private fun dp(value: Float): Float {
-        return value * resources.displayMetrics.density
-    }
+    private fun dp(value: Float): Float =
+        value * resources.displayMetrics.density
 }

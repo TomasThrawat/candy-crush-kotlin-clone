@@ -15,9 +15,9 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         reset()
     }
 
-    fun reset() {
+    fun reset(moves: Int = 20) {
         score = 0
-        movesLeft = 20
+        movesLeft = moves.coerceAtLeast(1)
         refill()
     }
 
