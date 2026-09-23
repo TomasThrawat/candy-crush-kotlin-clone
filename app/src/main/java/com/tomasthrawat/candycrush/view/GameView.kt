@@ -159,10 +159,10 @@ class GameView @JvmOverloads constructor(
     private var mapDragging = false
     private var mapVelocityTracker: VelocityTracker? = null
 
-    private var swipeDownX = 0f
-    private var swipeDownY = 0f
-    private var swipeVelocityTracker: VelocityTracker? = null
-    private var swipeTracking = false
+    private var gestureStartRow = -1
+    private var gestureStartCol = -1
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
     private var levelTransitionRunning = false
 
     init {
@@ -341,7 +341,7 @@ class GameView @JvmOverloads constructor(
         val subtitle = when {
             levelComplete -> "Swipe up for the next level"
             gameOver -> "Swipe down to retry or up when unlocked"
-            else -> "Swipe up/down for levels • tap two candies to swap"
+            else -> "Swipe a candy to swap • tap the level for the map"
         }
         canvas.drawText(subtitle, width / 2f, dp(55f), secondaryTextPaint)
 
@@ -818,6 +818,27 @@ class GameView @JvmOverloads constructor(
         }
     }
 
+    private fun cellFromPoint(x: Float, y: Float): Pair<Int, Int>? {
+        if (cellSize <= 0f) return null
+
+        val boardX = x - boardLeft
+        val boardY = y - boardTop
+        if (boardX < 0f || boardY < 0f || boardX > boardSize || boardY > boardSize) {
+            return null
+        }
+
+        val step = cellSize + gap
+        val col = (boardX / step).toInt()
+        val row = (boardY / step).toInt()
+        if (row !in 0 until board.rows || col !in 0 until board.cols) return null
+
+        val cellLeft = col * step
+        val cellTop = row * step
+        if (boardX > cellLeft + cellSize || boardY > cellTop + cellSize) return null
+
+        return row to col
+    }
+
     private fun beginSwap(r1: Int, c1: Int, r2: Int, c2: Int) {
         if (swapAnimator?.isRunning == true) return
 
@@ -1003,70 +1024,58 @@ class GameView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
-                swipeDownX = event.x
-                swipeDownY = event.y
-                swipeTracking = false
-                swipeVelocityTracker?.recycle()
-                swipeVelocityTracker = VelocityTracker.obtain().also { it.addMovement(event) }
+                gestureStartX = event.x
+                gestureStartY = event.y
+
+                val startCell = cellFromPoint(event.x, event.y)
+                gestureStartRow = startCell?.first ?: -1
+                gestureStartCol = startCell?.second ?: -1
                 return true
             }
 
-            MotionEvent.ACTION_MOVE -> {
-                swipeVelocityTracker?.addMovement(event)
-
-                val dx = event.x - swipeDownX
-                val dy = event.y - swipeDownY
-
-                if (!swipeTracking) {
-                    val moved = abs(dx) > touchSlop || abs(dy) > touchSlop
-                    if (moved && abs(dy) >= abs(dx) * 0.9f) {
-                        swipeTracking = true
-                        selectedRow = -1
-                        selectedCol = -1
-                    }
-                }
-
-                if (swipeTracking) {
-                    invalidate()
-                    return true
-                }
-
-                return true
-            }
+            MotionEvent.ACTION_MOVE -> true
 
             MotionEvent.ACTION_UP -> {
-                swipeVelocityTracker?.addMovement(event)
-                swipeVelocityTracker?.computeCurrentVelocity(1000)
+                val dx = event.x - gestureStartX
+                val dy = event.y - gestureStartY
+                val startRow = gestureStartRow
+                val startCol = gestureStartCol
 
-                val dx = event.x - swipeDownX
-                val dy = event.y - swipeDownY
-                val velocityY = swipeVelocityTracker?.yVelocity ?: 0f
-                val distanceY = abs(dy)
-                val verticalEnough =
-                    distanceY >= dp(36f) &&
-                    distanceY >= abs(dx) * 0.9f
-                val quickFling =
-                    abs(velocityY) >= minimumFlingVelocity * 0.65f &&
-                    distanceY >= dp(24f)
-                val wasSwipe = verticalEnough || quickFling
-
-                swipeVelocityTracker?.recycle()
-                swipeVelocityTracker = null
-                swipeTracking = false
                 parent?.requestDisallowInterceptTouchEvent(false)
+                gestureStartRow = -1
+                gestureStartCol = -1
 
-                if (wasSwipe) {
-                    val direction = if (dy < 0f) 1 else -1
-                    navigateLevelBySwipe(direction)
+                if (swapAnimator?.isRunning == true ||
+                    successAnimator?.isRunning == true ||
+                    fallingAnimator?.isRunning == true
+                ) {
                     return true
                 }
 
-                if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true || fallingAnimator?.isRunning == true) {
-                    return true
-                }
+                if (startRow in 0 until board.rows && startCol in 0 until board.cols) {
+                    val threshold = max(dp(18f), min(cellSize * 0.30f, dp(32f)))
+                    val horizontal = abs(dx) >= abs(dy)
 
-                if (abs(velocityY) >= minimumFlingVelocity && abs(dy) > touchSlop) {
-                    return true
+                    if (max(abs(dx), abs(dy)) >= threshold) {
+                        val targetRow = when {
+                            !horizontal && dy < 0f -> startRow - 1
+                            !horizontal -> startRow + 1
+                            else -> startRow
+                        }
+                        val targetCol = when {
+                            horizontal && dx > 0f -> startCol + 1
+                            horizontal -> startCol - 1
+                            else -> startCol
+                        }
+
+                        if (targetRow in 0 until board.rows &&
+                            targetCol in 0 until board.cols
+                        ) {
+                            beginSwap(startRow, startCol, targetRow, targetCol)
+                            invalidate()
+                        }
+                        return true
+                    }
                 }
 
                 if (levelChipRect.contains(event.x, event.y)) {
@@ -1084,22 +1093,9 @@ class GameView @JvmOverloads constructor(
                     return true
                 }
 
-                if (cellSize <= 0f) return true
-
-                val boardX = event.x - boardLeft
-                val boardY = event.y - boardTop
-                if (boardX < 0f || boardY < 0f || boardX > boardSize || boardY > boardSize) {
-                    return true
-                }
-
-                val step = cellSize + gap
-                val col = (boardX / step).toInt()
-                val row = (boardY / step).toInt()
-                if (row !in 0 until board.rows || col !in 0 until board.cols) return true
-
-                val cellLeft = col * step
-                val cellTop = row * step
-                if (boardX > cellLeft + cellSize || boardY > cellTop + cellSize) return true
+                val cell = cellFromPoint(event.x, event.y) ?: return true
+                val row = cell.first
+                val col = cell.second
 
                 if (selectedRow == -1) {
                     selectedRow = row
@@ -1111,14 +1107,11 @@ class GameView @JvmOverloads constructor(
                     if (fromRow == row && fromCol == col) {
                         selectedRow = -1
                         selectedCol = -1
+                    } else if (abs(fromRow - row) + abs(fromCol - col) == 1) {
+                        beginSwap(fromRow, fromCol, row, col)
                     } else {
-                        val adjacent = abs(fromRow - row) + abs(fromCol - col) == 1
-                        if (adjacent) {
-                            beginSwap(fromRow, fromCol, row, col)
-                        } else {
-                            selectedRow = row
-                            selectedCol = col
-                        }
+                        selectedRow = row
+                        selectedCol = col
                     }
                 }
 
@@ -1127,14 +1120,13 @@ class GameView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                swipeVelocityTracker?.recycle()
-                swipeVelocityTracker = null
-                swipeTracking = false
+                gestureStartRow = -1
+                gestureStartCol = -1
                 parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
 
-            else -> return true
+            else -> true
         }
     }
 
@@ -1192,8 +1184,6 @@ class GameView @JvmOverloads constructor(
         levelScroller.forceFinished(true)
         mapVelocityTracker?.recycle()
         mapVelocityTracker = null
-        swipeVelocityTracker?.recycle()
-        swipeVelocityTracker = null
         sound.release()
         super.onDetachedFromWindow()
     }
