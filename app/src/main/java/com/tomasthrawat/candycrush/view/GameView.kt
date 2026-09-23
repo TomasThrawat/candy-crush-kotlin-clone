@@ -1002,6 +1002,7 @@ class GameView @JvmOverloads constructor(
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
                 swipeDownX = event.x
                 swipeDownY = event.y
                 swipeTracking = false
@@ -1018,7 +1019,7 @@ class GameView @JvmOverloads constructor(
 
                 if (!swipeTracking) {
                     val moved = abs(dx) > touchSlop || abs(dy) > touchSlop
-                    if (moved && abs(dy) > abs(dx)) {
+                    if (moved && abs(dy) >= abs(dx) * 0.9f) {
                         swipeTracking = true
                         selectedRow = -1
                         selectedCol = -1
@@ -1040,14 +1041,19 @@ class GameView @JvmOverloads constructor(
                 val dx = event.x - swipeDownX
                 val dy = event.y - swipeDownY
                 val velocityY = swipeVelocityTracker?.yVelocity ?: 0f
-
-                val wasSwipe = swipeTracking &&
-                    abs(dy) >= dp(48f) &&
-                    abs(dy) > abs(dx) * 1.08f
+                val distanceY = abs(dy)
+                val verticalEnough =
+                    distanceY >= dp(36f) &&
+                    distanceY >= abs(dx) * 0.9f
+                val quickFling =
+                    abs(velocityY) >= minimumFlingVelocity * 0.65f &&
+                    distanceY >= dp(24f)
+                val wasSwipe = verticalEnough || quickFling
 
                 swipeVelocityTracker?.recycle()
                 swipeVelocityTracker = null
                 swipeTracking = false
+                parent?.requestDisallowInterceptTouchEvent(false)
 
                 if (wasSwipe) {
                     val direction = if (dy < 0f) 1 else -1
@@ -1124,6 +1130,7 @@ class GameView @JvmOverloads constructor(
                 swipeVelocityTracker?.recycle()
                 swipeVelocityTracker = null
                 swipeTracking = false
+                parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
 
