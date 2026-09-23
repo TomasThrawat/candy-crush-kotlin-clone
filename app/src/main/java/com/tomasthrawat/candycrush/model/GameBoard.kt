@@ -2,6 +2,18 @@ package com.tomasthrawat.candycrush.model
 
 import kotlin.random.Random
 
+data class FallingCandy(
+    val type: Int,
+    val column: Int,
+    val startRow: Float,
+    val endRow: Float
+)
+
+data class ResolveStep(
+    val matchedCount: Int,
+    val fallingCandies: List<FallingCandy>
+)
+
 class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     private val board: Array<Array<Candy?>> = Array(rows) { arrayOfNulls<Candy>(cols) }
 
@@ -11,6 +23,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     var movesLeft: Int = 20
         private set
 
+    private var pendingMatches: Set<Pair<Int, Int>> = emptySet()
+
     init {
         reset()
     }
@@ -18,6 +32,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     fun reset(moves: Int = 20) {
         score = 0
         movesLeft = moves.coerceAtLeast(1)
+        pendingMatches = emptySet()
         refill()
     }
 
@@ -41,6 +56,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     fun swap(r1: Int, c1: Int, r2: Int, c2: Int): Boolean {
         if (!isAdjacent(r1, c1, r2, c2)) return false
+        if (pendingMatches.isNotEmpty()) return false
 
         val a = board[r1][c1] ?: return false
         val b = board[r2][c2] ?: return false
@@ -56,8 +72,61 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         }
 
         movesLeft--
-        resolveMatches(matches)
+        pendingMatches = matches
         return true
+    }
+
+    fun prepareCascade(): Boolean {
+        if (pendingMatches.isNotEmpty()) return true
+        val matches = findMatches()
+        if (matches.isEmpty()) return false
+        pendingMatches = matches
+        return true
+    }
+
+    fun resolveNextStep(): ResolveStep? {
+        if (pendingMatches.isEmpty()) {
+            if (!prepareCascade()) return null
+        }
+
+        val matches = pendingMatches
+        pendingMatches = emptySet()
+        score += matches.size * 10
+
+        for ((r, c) in matches) {
+            board[r][c] = null
+        }
+
+        val falling = mutableListOf<FallingCandy>()
+
+        for (c in 0 until cols) {
+            var write = rows - 1
+
+            for (r in rows - 1 downTo 0) {
+                val cell = board[r][c]
+                if (cell != null) {
+                    if (write != r) {
+                        falling += FallingCandy(cell.type, c, r.toFloat(), write.toFloat())
+                    }
+                    board[write][c] = Candy(cell.type, write, c)
+                    if (write != r) {
+                        board[r][c] = null
+                    }
+                    write--
+                }
+            }
+
+            val missing = write + 1
+            for (r in write downTo 0) {
+                val finalRow = r
+                val startRow = -(missing - r).toFloat()
+                val type = Random.nextInt(Candy.NUM_TYPES)
+                board[finalRow][c] = Candy(type, finalRow, c)
+                falling += FallingCandy(type, c, startRow, finalRow.toFloat())
+            }
+        }
+
+        return ResolveStep(matches.size, falling)
     }
 
     private fun isAdjacent(r1: Int, c1: Int, r2: Int, c2: Int): Boolean {
@@ -108,38 +177,6 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         }
 
         return result
-    }
-
-    private fun resolveMatches(matches: Set<Pair<Int, Int>>) {
-        score += matches.size * 10
-
-        for ((r, c) in matches) {
-            board[r][c] = null
-        }
-
-        for (c in 0 until cols) {
-            var write = rows - 1
-
-            for (r in rows - 1 downTo 0) {
-                val cell = board[r][c]
-                if (cell != null) {
-                    board[write][c] = Candy(cell.type, write, c)
-                    if (write != r) {
-                        board[r][c] = null
-                    }
-                    write--
-                }
-            }
-
-            for (r in write downTo 0) {
-                board[r][c] = Candy(Random.nextInt(Candy.NUM_TYPES), r, c)
-            }
-        }
-
-        val cascade = findMatches()
-        if (cascade.isNotEmpty()) {
-            resolveMatches(cascade)
-        }
     }
 
     fun isGameOver(): Boolean = movesLeft <= 0

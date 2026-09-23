@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.view.MotionEvent
 import android.view.VelocityTracker
+import com.tomasthrawat.candycrush.model.FallingCandy
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
@@ -140,6 +141,9 @@ class GameView @JvmOverloads constructor(
     private var successAnimator: ValueAnimator? = null
 
     private var successPulse = 0f
+    private var fallingAnimator: ValueAnimator? = null
+    private var fallingCandies: List<FallingCandy> = emptyList()
+    private var fallingProgress = 0f
     private var gameOver = false
     private var levelComplete = false
 
@@ -287,7 +291,7 @@ class GameView @JvmOverloads constructor(
 
         for (r in 0 until board.rows) {
             for (c in 0 until board.cols) {
-                if (isMovingCell(r, c)) continue
+                if (isMovingCell(r, c) || isFallingDestination(r, c)) continue
 
                 val candy = board.get(r, c) ?: continue
                 val center = cellCenter(r, c)
@@ -316,6 +320,10 @@ class GameView @JvmOverloads constructor(
 
             drawCandy(canvas, movingFromType, firstX, firstY, 1.045f, false)
             drawCandy(canvas, movingToType, secondX, secondY, 1.045f, false)
+        }
+
+        if (fallingAnimator?.isRunning == true || fallingCandies.isNotEmpty()) {
+            drawFallingCandies(canvas)
         }
 
         if (successPulse > 0f) {
@@ -841,8 +849,7 @@ class GameView @JvmOverloads constructor(
                 override fun onAnimationEnd(animation: Animator) {
                     val success = board.swap(r1, c1, r2, c2)
                     if (success) {
-                        sound.playMatch()
-                        startSuccessPulse()
+                        startResolutionAnimation()
                     } else {
                         startReverseSwap()
                     }
@@ -871,6 +878,94 @@ class GameView @JvmOverloads constructor(
             })
             start()
         }
+    }
+
+    private fun startResolutionAnimation() {
+        if (fallingAnimator?.isRunning == true) return
+
+        val step = board.resolveNextStep()
+        if (step == null) {
+            fallingCandies = emptyList()
+            fallingProgress = 0f
+            startSuccessPulse()
+            return
+        }
+
+        sound.playMatch()
+        fallingCandies = step.fallingCandies
+        fallingProgress = 0f
+
+        if (fallingCandies.isEmpty()) {
+            post { continueResolutionAnimation() }
+            return
+        }
+
+        fallingAnimator?.cancel()
+        fallingAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 560L
+            interpolator = DecelerateInterpolator(1.7f)
+
+            addUpdateListener {
+                fallingProgress = it.animatedValue as Float
+                invalidate()
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    fallingProgress = 1f
+                    fallingAnimator = null
+                    fallingCandies = emptyList()
+                    invalidate()
+                    continueResolutionAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    fallingAnimator = null
+                    fallingCandies = emptyList()
+                    fallingProgress = 0f
+                }
+            })
+            start()
+        }
+    }
+
+    private fun continueResolutionAnimation() {
+        if (!isAttachedToWindow) return
+        if (board.prepareCascade()) {
+            startResolutionAnimation()
+        } else {
+            startSuccessPulse()
+        }
+    }
+
+    private fun drawFallingCandies(canvas: Canvas) {
+        val progress = easeOut(fallingProgress)
+
+        for (falling in fallingCandies) {
+            val start = cellCenterAt(falling.startRow, falling.column)
+            val end = cellCenterAt(falling.endRow, falling.column)
+            val x = lerp(start.first, end.first, progress)
+            val y = lerp(start.second, end.second, progress)
+            drawCandy(canvas, falling.type, x, y, 1f, false)
+        }
+    }
+
+    private fun isFallingDestination(row: Int, col: Int): Boolean {
+        if (fallingCandies.isEmpty()) return false
+        return fallingCandies.any { it.column == col && it.endRow.toInt() == row }
+    }
+
+    private fun cellCenterAt(row: Float, col: Int): Pair<Float, Float> {
+        val step = cellSize + gap
+        return Pair(
+            boardLeft + col * step + cellSize / 2f,
+            boardTop + row * step + cellSize / 2f
+        )
+    }
+
+    private fun easeOut(value: Float): Float {
+        val t = (1f - value).coerceIn(0f, 1f)
+        return 1f - t * t * t
     }
 
     private fun startSuccessPulse() {
@@ -947,8 +1042,8 @@ class GameView @JvmOverloads constructor(
                 val velocityY = swipeVelocityTracker?.yVelocity ?: 0f
 
                 val wasSwipe = swipeTracking &&
-                    abs(dy) >= dp(72f) &&
-                    abs(dy) > abs(dx) * 1.15f
+                    abs(dy) >= dp(48f) &&
+                    abs(dy) > abs(dx) * 1.08f
 
                 swipeVelocityTracker?.recycle()
                 swipeVelocityTracker = null
@@ -960,7 +1055,7 @@ class GameView @JvmOverloads constructor(
                     return true
                 }
 
-                if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) {
+                if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true || fallingAnimator?.isRunning == true) {
                     return true
                 }
 
@@ -1039,20 +1134,18 @@ class GameView @JvmOverloads constructor(
     private fun navigateLevelBySwipe(direction: Int) {
         if (levelTransitionRunning || direction == 0) return
 
-        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) {
+        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true || fallingAnimator?.isRunning == true) {
             return
         }
 
         val target = currentLevel + direction.toLong()
-        val canMove = target >= 1L && target <= highestUnlockedLevel
-
-        if (!canMove) {
-            if (gameOver && direction < 0) {
-                startLevel(currentLevel)
-            }
+        if (target < 1L) {
+            if (gameOver && direction < 0) startLevel(currentLevel)
             return
         }
 
+        highestUnlockedLevel = max(highestUnlockedLevel, target)
+        persistProgress()
         animateLevelPage(direction, target)
     }
 
@@ -1101,8 +1194,12 @@ class GameView @JvmOverloads constructor(
     private fun cancelAnimations() {
         swapAnimator?.cancel()
         successAnimator?.cancel()
+        fallingAnimator?.cancel()
         swapAnimator = null
         successAnimator = null
+        fallingAnimator = null
+        fallingCandies = emptyList()
+        fallingProgress = 0f
         successPulse = 0f
         swapProgress = 0f
         clearMovingState()
