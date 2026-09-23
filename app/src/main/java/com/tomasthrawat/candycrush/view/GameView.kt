@@ -1112,8 +1112,13 @@ class GameView @JvmOverloads constructor(
         canvas.drawText(title, rect.centerX(), rect.top + dp(31f), textPaint)
 
         secondaryTextPaint.textSize = dp(12f)
+        val detail = if (title == "UNLIMITED MOVES") {
+            "Moves never run out • ∞"
+        } else {
+            subtitle + " • " + price + " coins • owned " + owned
+        }
         canvas.drawText(
-            subtitle + " • " + price + " coins • owned " + owned,
+            detail,
             rect.centerX(),
             rect.bottom - dp(25f),
             secondaryTextPaint
