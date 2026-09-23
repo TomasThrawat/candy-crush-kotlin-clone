@@ -1323,7 +1323,7 @@ class GameView @JvmOverloads constructor(
                 when (screen) {
                     Screen.MENU -> handleMenuTap(event.x, event.y)
                     Screen.SHOP -> handleShopTap(event.x, event.y)
-                    Screen.HELPERS -> handleHelpersTap(event.x, event.y)
+                    Screen.HELPERS -> handleHelpersTap(event.y)
                     Screen.LEVEL_MAP -> handleMapTap(event.x, event.y)
                     Screen.GAME -> handleGameUp(event)
                 }
@@ -1495,7 +1495,7 @@ class GameView @JvmOverloads constructor(
         }
     }
 
-    private fun handleHelpersTap(x: Float, y: Float) {
+    private fun handleHelpersTap(y: Float) {
         if (y >= height - dp(80f)) {
             screen = Screen.MENU
             invalidate()
@@ -1598,7 +1598,7 @@ class GameView @JvmOverloads constructor(
     private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
-    private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
+    private fun sp(value: Float): Float = value * resources.displayMetrics.density * resources.configuration.fontScale
 
     override fun onDetachedFromWindow() {
         cancelAnimations()
