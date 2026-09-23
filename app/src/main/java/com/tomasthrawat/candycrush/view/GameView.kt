@@ -155,6 +155,12 @@ class GameView @JvmOverloads constructor(
     private var mapDragging = false
     private var mapVelocityTracker: VelocityTracker? = null
 
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private var swipeVelocityTracker: VelocityTracker? = null
+    private var swipeTracking = false
+    private var levelTransitionRunning = false
+
     init {
         isClickable = true
         overScrollMode = OVER_SCROLL_NEVER
@@ -325,9 +331,9 @@ class GameView @JvmOverloads constructor(
         canvas.drawText("CANDY RUSH", width / 2f, dp(33f), textPaint)
 
         val subtitle = when {
-            levelComplete -> "Level cleared!"
-            gameOver -> "Out of moves"
-            else -> "Tap a candy, then tap an adjacent one"
+            levelComplete -> "Swipe up for the next level"
+            gameOver -> "Swipe down to retry or up when unlocked"
+            else -> "Swipe up/down for levels • tap two candies to swap"
         }
         canvas.drawText(subtitle, width / 2f, dp(55f), secondaryTextPaint)
 
@@ -897,69 +903,197 @@ class GameView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (levelMapMode) return onMapTouch(event)
+        if (levelTransitionRunning) return true
 
-        if (event.actionMasked != MotionEvent.ACTION_DOWN) return true
-        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) return true
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeDownX = event.x
+                swipeDownY = event.y
+                swipeTracking = false
+                swipeVelocityTracker?.recycle()
+                swipeVelocityTracker = VelocityTracker.obtain().also { it.addMovement(event) }
+                return true
+            }
 
-        if (levelChipRect.contains(event.x, event.y)) {
-            openLevelMap()
-            return true
-        }
+            MotionEvent.ACTION_MOVE -> {
+                swipeVelocityTracker?.addMovement(event)
 
-        if (gameOver) {
-            startLevel(currentLevel)
-            return true
-        }
+                val dx = event.x - swipeDownX
+                val dy = event.y - swipeDownY
 
-        if (levelComplete) {
-            startLevel(currentLevel + 1L)
-            return true
-        }
+                if (!swipeTracking) {
+                    val moved = abs(dx) > touchSlop || abs(dy) > touchSlop
+                    if (moved && abs(dy) > abs(dx)) {
+                        swipeTracking = true
+                        selectedRow = -1
+                        selectedCol = -1
+                    }
+                }
 
-        if (cellSize <= 0f) return true
+                if (swipeTracking) {
+                    invalidate()
+                    return true
+                }
 
-        val dx = event.x - boardLeft
-        val dy = event.y - boardTop
-        if (dx < 0f || dy < 0f || dx > boardSize || dy > boardSize) return true
+                return true
+            }
 
-        val step = cellSize + gap
-        val col = (dx / step).toInt()
-        val row = (dy / step).toInt()
-        if (row !in 0 until board.rows || col !in 0 until board.cols) return true
+            MotionEvent.ACTION_UP -> {
+                swipeVelocityTracker?.addMovement(event)
+                swipeVelocityTracker?.computeCurrentVelocity(1000)
 
-        val cellLeft = col * step
-        val cellTop = row * step
-        if (dx > cellLeft + cellSize || dy > cellTop + cellSize) return true
+                val dx = event.x - swipeDownX
+                val dy = event.y - swipeDownY
+                val velocityY = swipeVelocityTracker?.yVelocity ?: 0f
 
-        if (selectedRow == -1) {
-            selectedRow = row
-            selectedCol = col
-        } else {
-            val fromRow = selectedRow
-            val fromCol = selectedCol
+                val wasSwipe = swipeTracking &&
+                    abs(dy) >= dp(72f) &&
+                    abs(dy) > abs(dx) * 1.15f
 
-            if (fromRow == row && fromCol == col) {
-                selectedRow = -1
-                selectedCol = -1
-            } else {
-                val adjacent = abs(fromRow - row) + abs(fromCol - col) == 1
-                if (adjacent) beginSwap(fromRow, fromCol, row, col)
-                else {
+                swipeVelocityTracker?.recycle()
+                swipeVelocityTracker = null
+                swipeTracking = false
+
+                if (wasSwipe) {
+                    val direction = if (dy < 0f) 1 else -1
+                    navigateLevelBySwipe(direction)
+                    return true
+                }
+
+                if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) {
+                    return true
+                }
+
+                if (abs(velocityY) >= minimumFlingVelocity && abs(dy) > touchSlop) {
+                    return true
+                }
+
+                if (levelChipRect.contains(event.x, event.y)) {
+                    openLevelMap()
+                    return true
+                }
+
+                if (gameOver) {
+                    startLevel(currentLevel)
+                    return true
+                }
+
+                if (levelComplete) {
+                    navigateLevelBySwipe(1)
+                    return true
+                }
+
+                if (cellSize <= 0f) return true
+
+                val boardX = event.x - boardLeft
+                val boardY = event.y - boardTop
+                if (boardX < 0f || boardY < 0f || boardX > boardSize || boardY > boardSize) {
+                    return true
+                }
+
+                val step = cellSize + gap
+                val col = (boardX / step).toInt()
+                val row = (boardY / step).toInt()
+                if (row !in 0 until board.rows || col !in 0 until board.cols) return true
+
+                val cellLeft = col * step
+                val cellTop = row * step
+                if (boardX > cellLeft + cellSize || boardY > cellTop + cellSize) return true
+
+                if (selectedRow == -1) {
                     selectedRow = row
                     selectedCol = col
+                } else {
+                    val fromRow = selectedRow
+                    val fromCol = selectedCol
+
+                    if (fromRow == row && fromCol == col) {
+                        selectedRow = -1
+                        selectedCol = -1
+                    } else {
+                        val adjacent = abs(fromRow - row) + abs(fromCol - col) == 1
+                        if (adjacent) {
+                            beginSwap(fromRow, fromCol, row, col)
+                        } else {
+                            selectedRow = row
+                            selectedCol = col
+                        }
+                    }
                 }
+
+                invalidate()
+                return true
             }
+
+            MotionEvent.ACTION_CANCEL -> {
+                swipeVelocityTracker?.recycle()
+                swipeVelocityTracker = null
+                swipeTracking = false
+                return true
+            }
+
+            else -> return true
+        }
+    }
+
+    private fun navigateLevelBySwipe(direction: Int) {
+        if (levelTransitionRunning || direction == 0) return
+
+        if (swapAnimator?.isRunning == true || successAnimator?.isRunning == true) {
+            return
         }
 
-        invalidate()
-        return true
+        val target = currentLevel + direction.toLong()
+        val canMove = target >= 1L && target <= highestUnlockedLevel
+
+        if (!canMove) {
+            if (gameOver && direction < 0) {
+                startLevel(currentLevel)
+            }
+            return
+        }
+
+        animateLevelPage(direction, target)
+    }
+
+    private fun animateLevelPage(direction: Int, targetLevel: Long) {
+        levelTransitionRunning = true
+        cancelAnimations()
+        selectedRow = -1
+        selectedCol = -1
+
+        val exitDistance = -direction * height.toFloat()
+
+        animate()
+            .translationY(exitDistance)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator(1.35f))
+            .withEndAction {
+                startLevel(targetLevel)
+                translationY = -exitDistance
+                animate()
+                    .translationY(0f)
+                    .setDuration(220L)
+                    .setInterpolator(DecelerateInterpolator(1.25f))
+                    .withEndAction {
+                        levelTransitionRunning = false
+                        invalidate()
+                    }
+                    .start()
+            }
+            .start()
     }
 
     override fun onDetachedFromWindow() {
         cancelAnimations()
+        animate().cancel()
+        translationY = 0f
+        levelTransitionRunning = false
         levelScroller.forceFinished(true)
         mapVelocityTracker?.recycle()
         mapVelocityTracker = null
+        swipeVelocityTracker?.recycle()
+        swipeVelocityTracker = null
         sound.release()
         super.onDetachedFromWindow()
     }
