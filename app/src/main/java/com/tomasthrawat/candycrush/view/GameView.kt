@@ -1568,6 +1568,18 @@ class GameView @JvmOverloads constructor(
             boardTop + row * cellSize + cellSize / 2f
         )
 
+    private fun clearMoveVisuals() {
+        swapFrom = null
+        swapTo = null
+        matchedVisuals.clear()
+        fallingCandies = emptyList()
+        swapProgress = 0f
+        matchProgress = 0f
+        rocketStart = null
+        rocketTarget = null
+        invalidate()
+    }
+
     private fun clearTouch() {
         downRow = -1
         downCol = -1
