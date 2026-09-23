@@ -1185,33 +1185,6 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawMenuButton(canvas: Canvas, rect: RectF, label: String) {
-        val primary = label == "PLAY"
-        cardPaint.color = Color.argb(if (primary) 255 else 220, 255, 246, 220)
-        canvas.drawRoundRect(
-            RectF(rect.left, rect.top + dp(5f), rect.right, rect.bottom + dp(5f)),
-            dp(20f),
-            dp(20f),
-            cardPaint
-        )
-
-        cardPaint.color = Color.argb(90, 6, 9, 25)
-        canvas.drawRoundRect(
-            RectF(rect.left + dp(2f), rect.top + dp(2f), rect.right + dp(2f), rect.bottom + dp(7f)),
-            dp(20f),
-            dp(20f),
-            cardPaint
-        )
-
-        cardPaint.color = if (primary) Color.rgb(255, 223, 109) else Color.rgb(255, 214, 194)
-        canvas.drawRoundRect(rect, dp(20f), dp(20f), cardPaint)
-
-        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
-        textPaint.textSize = dp(if (primary) 21f else 18f)
-        textPaint.color = Color.rgb(67, 39, 79)
-        canvas.drawText(label, rect.centerX(), rect.centerY() + dp(7f), textPaint)
-    }
-
-    private fun drawMenuButton(canvas: Canvas, rect: RectF, label: String) {
         cardPaint.color = Color.argb(92, 255, 255, 255)
         canvas.drawRoundRect(rect, dp(20f), dp(20f), cardPaint)
         cardPaint.color = Color.argb(35, 255, 255, 255)
@@ -1229,29 +1202,6 @@ class GameView @JvmOverloads constructor(
         textPaint.textSize = dp(20f)
         textPaint.color = Color.WHITE
         canvas.drawText(label, rect.centerX(), rect.centerY() + dp(7f), textPaint)
-    }
-
-    private fun drawShop(canvas: Canvas) {
-        textPaint.textSize = dp(29f)
-        textPaint.color = Color.WHITE
-        canvas.drawText("HELPER SHOP", width / 2f, dp(44f), textPaint)
-
-        accentTextPaint.textSize = dp(17f)
-        canvas.drawText("COINS  " + coins, width / 2f, dp(76f), accentTextPaint)
-
-        drawShopItem(canvas, shopHammerRect, "HAMMER", "Remove one candy", 40, helperCounts[0])
-        drawShopItem(canvas, shopCrossRect, "CROSS BLAST", "Clear row + column", 60, helperCounts[1])
-        drawShopItem(canvas, shopMovesRect, "UNLIMITED MOVES", "Moves never run out", 0, Int.MAX_VALUE)
-
-        cardPaint.color = Color.argb(70, 255, 255, 255)
-        canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
-        secondaryTextPaint.textSize = dp(13f)
-        canvas.drawText(
-            "BACK",
-            screenBackRect.centerX(),
-            screenBackRect.centerY() + dp(4f),
-            secondaryTextPaint
-        )
     }
 
     private fun drawShop(canvas: Canvas) {
