@@ -687,6 +687,46 @@ class GameView @JvmOverloads constructor(
         canvas.restore()
     }
 
+    private fun drawCandyHighlight(canvas: Canvas, half: Float) {
+        candyHighlightPaint.alpha = 178
+        canvas.drawOval(
+            RectF(
+                -half * 0.52f,
+                -half * 0.52f,
+                -half * 0.03f,
+                -half * 0.12f
+            ),
+            candyHighlightPaint
+        )
+
+        candyHighlightPaint.alpha = 78
+        canvas.drawCircle(
+            half * 0.28f,
+            half * 0.34f,
+            half * 0.12f,
+            candyHighlightPaint
+        )
+        candyHighlightPaint.alpha = 105
+    }
+
+    private fun lightenColor(color: Int, amount: Float): Int {
+        val factor = amount.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(color) + (255 - Color.red(color)) * factor).toInt(),
+            (Color.green(color) + (255 - Color.green(color)) * factor).toInt(),
+            (Color.blue(color) + (255 - Color.blue(color)) * factor).toInt()
+        )
+    }
+
+    private fun darkenColor(color: Int, amount: Float): Int {
+        val factor = 1f - amount.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(color) * factor).toInt(),
+            (Color.green(color) * factor).toInt(),
+            (Color.blue(color) * factor).toInt()
+        )
+    }
+
     private fun drawBombCandy(canvas: Canvas, half: Float) {
         candyPaint.shader = RadialGradient(
             -half * 0.28f,
