@@ -1033,7 +1033,7 @@ class GameView @JvmOverloads constructor(
                 return true
             }
 
-            MotionEvent.ACTION_MOVE -> true
+            MotionEvent.ACTION_MOVE -> return true
 
             MotionEvent.ACTION_UP -> {
                 val dx = event.x - gestureStartX
@@ -1126,7 +1126,7 @@ class GameView @JvmOverloads constructor(
                 return true
             }
 
-            else -> true
+            else -> return true
         }
     }
 
