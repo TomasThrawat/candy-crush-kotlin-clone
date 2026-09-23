@@ -105,6 +105,9 @@ class GameView @JvmOverloads constructor(
         BitmapFactory.decodeResource(resources, R.drawable.candy_ref_4),
         BitmapFactory.decodeResource(resources, R.drawable.candy_ref_5)
     )
+    private val peppermintCandyJarBitmap =
+        BitmapFactory.decodeResource(resources, R.drawable.peppermint_candy_jar)
+
 
     private val candyHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(105, 255, 255, 255)
@@ -502,12 +505,13 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawHeader(canvas: Canvas) {
+        drawPeppermintCandyJar(canvas)
         canvas.drawText("CANDY RUSH", width / 2f, dp(33f), textPaint)
 
         val subtitle = when {
             levelComplete -> "Swipe up for the next level"
             gameOver -> "Swipe down to retry or up when unlocked"
-            else -> "Swipe a candy to swap • tap the level for the map"
+            else -> "Swipe a candy to swap â¢ tap the level for the map"
         }
         canvas.drawText(subtitle, width / 2f, dp(55f), secondaryTextPaint)
 
@@ -520,7 +524,7 @@ class GameView @JvmOverloads constructor(
             cardPaint
         )
         canvas.drawText(
-            "LEVEL " + currentLevel + "  •  TARGET " + targetScoreForLevel(currentLevel),
+            "LEVEL " + currentLevel + "  â¢  TARGET " + targetScoreForLevel(currentLevel),
             levelChipRect.centerX(),
             dp(77f),
             accentTextPaint
@@ -555,13 +559,39 @@ class GameView @JvmOverloads constructor(
             accentTextPaint
         )
         canvas.drawText(
-            "MOVES  ∞",
+            "MOVES  â",
             movesRect.centerX(),
             chipY + dp(18f),
             secondaryTextPaint
         )
 
         drawGameMenuButton(canvas)
+    }
+
+    private fun drawPeppermintCandyJar(canvas: Canvas) {
+        val bitmap = peppermintCandyJarBitmap
+        if (bitmap.isRecycled) return
+
+        val size = dp(46f)
+        val left = dp(12f)
+        val top = dp(9f)
+        val dst = RectF(left, top, left + size, top + size)
+
+        cardPaint.color = Color.argb(45, 255, 255, 255)
+        canvas.drawRoundRect(
+            RectF(
+                left - dp(2f),
+                top - dp(2f),
+                left + size + dp(2f),
+                top + size + dp(2f)
+            ),
+            dp(12f),
+            dp(12f),
+            cardPaint
+        )
+
+        candyPaint.alpha = 255
+        canvas.drawBitmap(bitmap, null, dst, candyPaint)
     }
 
     private fun drawGameMenuButton(canvas: Canvas) {
@@ -1030,11 +1060,11 @@ class GameView @JvmOverloads constructor(
         canvas.drawText("CANDY RUSH", cx, height * 0.17f, textPaint)
 
         accentTextPaint.textSize = dp(15f)
-        canvas.drawText("COZY MATCH • ROCKETS • HELPERS", cx, height * 0.215f, accentTextPaint)
+        canvas.drawText("COZY MATCH â¢ ROCKETS â¢ HELPERS", cx, height * 0.215f, accentTextPaint)
 
         secondaryTextPaint.textSize = dp(14f)
         canvas.drawText(
-            "LEVEL " + currentLevel + "   •   COINS " + coins,
+            "LEVEL " + currentLevel + "   â¢   COINS " + coins,
             cx,
             height * 0.265f,
             secondaryTextPaint
@@ -1046,7 +1076,7 @@ class GameView @JvmOverloads constructor(
 
         secondaryTextPaint.textSize = dp(12f)
         canvas.drawText(
-            "Match 4 = rocket  •  Match 5 = directional bomb",
+            "Match 4 = rocket  â¢  Match 5 = directional bomb",
             cx,
             height * 0.76f,
             secondaryTextPaint
@@ -1113,9 +1143,9 @@ class GameView @JvmOverloads constructor(
 
         secondaryTextPaint.textSize = dp(12f)
         val detail = if (title == "UNLIMITED MOVES") {
-            "Moves never run out • ∞"
+            "Moves never run out â¢ â"
         } else {
-            subtitle + " • " + price + " coins • owned " + owned
+            subtitle + " â¢ " + price + " coins â¢ owned " + owned
         }
         canvas.drawText(
             detail,
@@ -1140,7 +1170,7 @@ class GameView @JvmOverloads constructor(
 
         drawHelperInfo(canvas, dp(105f), "HAMMER", "Tap it, then tap one candy", "x" + helperCounts[0])
         drawHelperInfo(canvas, dp(200f), "CROSS BLAST", "Tap it, then choose a candy", "x" + helperCounts[1])
-        drawHelperInfo(canvas, dp(295f), "MOVES", "Unlimited moves are always available", "∞")
+        drawHelperInfo(canvas, dp(295f), "MOVES", "Unlimited moves are always available", "â")
 
         accentTextPaint.textSize = dp(14f)
         canvas.drawText(
@@ -1204,7 +1234,7 @@ class GameView @JvmOverloads constructor(
 
             secondaryTextPaint.textSize = dp(10f)
             canvas.drawText(
-                if (title == "MOVES") "∞" else "x" + count,
+                if (title == "MOVES") "â" else "x" + count,
                 rect.centerX(),
                 rect.bottom - dp(9f),
                 secondaryTextPaint
@@ -1233,9 +1263,9 @@ class GameView @JvmOverloads constructor(
         if (activeHelper != ActiveHelper.NONE) {
             secondaryTextPaint.textSize = dp(10f)
             val label = if (activeHelper == ActiveHelper.HAMMER) {
-                "HAMMER ACTIVE • TAP A CANDY"
+                "HAMMER ACTIVE â¢ TAP A CANDY"
             } else {
-                "CROSS ACTIVE • TAP A CANDY"
+                "CROSS ACTIVE â¢ TAP A CANDY"
             }
             canvas.drawText(label, width / 2f, dp(168f), secondaryTextPaint)
         }
@@ -1318,7 +1348,7 @@ class GameView @JvmOverloads constructor(
 
         secondaryTextPaint.textSize = dp(12f)
         canvas.drawText(
-            "Swipe up/down • Tap an unlocked level",
+            "Swipe up/down â¢ Tap an unlocked level",
             width / 2f,
             dp(55f),
             secondaryTextPaint
@@ -1326,7 +1356,7 @@ class GameView @JvmOverloads constructor(
 
         accentTextPaint.textSize = dp(14f)
         canvas.drawText(
-            "UNLOCKED " + highestUnlockedLevel + "   •   VIEWING TO " + maxVisibleLevel,
+            "UNLOCKED " + highestUnlockedLevel + "   â¢   VIEWING TO " + maxVisibleLevel,
             width / 2f,
             dp(77f),
             accentTextPaint
