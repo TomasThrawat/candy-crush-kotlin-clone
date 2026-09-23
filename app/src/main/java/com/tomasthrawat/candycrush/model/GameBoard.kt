@@ -26,7 +26,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         var safety = 0
         while (findMatches().isNotEmpty() && safety++ < 200) {
             for (m in findMatches()) {
-                board[m.row][m.col] = Candy(Random.nextInt(Candy.NUM_TYPES), m.row, m.col)
+                board[m.first][m.second] = Candy(Random.nextInt(Candy.NUM_TYPES), m.first, m.second)
             }
         }
     }
