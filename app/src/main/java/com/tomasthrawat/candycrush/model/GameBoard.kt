@@ -5,6 +5,7 @@ import kotlin.random.Random
 
 private const val UNLIMITED_MOVES = Int.MAX_VALUE
 private const val SCORE_MULTIPLIER = 5
+private const val SCORE_REWARD_DIVISOR = 10
 
 data class FallingCandy(
     val type: Int,
@@ -420,7 +421,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     private fun addScore(basePoints: Int) {
         if (basePoints <= 0) return
-        val added = basePoints.toLong() * SCORE_MULTIPLIER.toLong()
+        val added = (basePoints.toLong() * SCORE_MULTIPLIER.toLong()) / SCORE_REWARD_DIVISOR.toLong()
         score = (score.toLong() + added).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 

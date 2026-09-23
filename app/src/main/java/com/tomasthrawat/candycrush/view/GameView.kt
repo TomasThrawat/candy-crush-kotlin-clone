@@ -29,6 +29,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
+private const val SCORE_TARGET_MULTIPLIER = 10
+private const val SCORE_RULES_VERSION = 2
+
 class GameView @JvmOverloads constructor(
     context: Context,
     attrs: android.util.AttributeSet? = null
@@ -168,22 +171,34 @@ class GameView @JvmOverloads constructor(
         for (i in 0..2) {
             model.helperCounts[i] = prefs.getInt("helper_" + i, model.helperCounts[i])
         }
+
+        val storedScoreRulesVersion = prefs.getInt("score_rules_version", 1)
+        val migrateScores = storedScoreRulesVersion < SCORE_RULES_VERSION
         for (level in 1L..30L) {
-            val best = prefs.getInt("best_" + level, 0)
+            val storedBest = prefs.getInt("best_" + level, 0)
+            val best = if (migrateScores) storedBest / SCORE_TARGET_MULTIPLIER else storedBest
             if (best > 0) model.bestScores[level] = best
         }
 
         val raw = prefs.getString("board", null)
         val snapshot = raw?.split(",")?.mapNotNull { it.toIntOrNull() }?.toIntArray()
         if (snapshot != null && snapshot.size == board.rows * board.cols) {
+            val storedBoardScore = prefs.getInt("board_score", 0)
+            val boardScore = if (migrateScores) storedBoardScore / SCORE_TARGET_MULTIPLIER else storedBoardScore
             board.restoreTypes(
                 snapshot,
-                prefs.getInt("board_score", 0),
+                boardScore,
                 prefs.getInt("board_moves", 24),
-                prefs.getInt("board_target", targetScoreForLevel(model.currentLevel))
+                targetScoreForLevel(model.currentLevel)
             )
         } else {
             startLevel(model.currentLevel)
+        }
+
+        if (migrateScores) {
+            savePersistentState()
+        } else if (storedScoreRulesVersion != SCORE_RULES_VERSION) {
+            prefs.edit().putInt("score_rules_version", SCORE_RULES_VERSION).apply()
         }
     }
 
@@ -197,6 +212,7 @@ class GameView @JvmOverloads constructor(
         edit.putInt("board_score", board.score)
         edit.putInt("board_moves", board.movesLeft)
         edit.putInt("board_target", board.targetScore)
+        edit.putInt("score_rules_version", SCORE_RULES_VERSION)
         for (i in 0..2) edit.putInt("helper_" + i, model.helperCounts[i])
         for ((level, best) in model.bestScores) edit.putInt("best_" + level, best)
         edit.apply()
@@ -227,7 +243,7 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun targetScoreForLevel(level: Long): Int =
-        620 + (level - 1L).coerceAtMost(29L).toInt() * 72
+        (620 + (level - 1L).coerceAtMost(29L).toInt() * 72) * SCORE_TARGET_MULTIPLIER
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
