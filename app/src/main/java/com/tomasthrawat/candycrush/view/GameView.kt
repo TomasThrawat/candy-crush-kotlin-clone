@@ -10,6 +10,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -150,6 +151,8 @@ class GameView @JvmOverloads constructor(
     private var bombProgress = 0f
     private var explosionCells: List<Pair<Int, Int>> = emptyList()
     private var explosionProgress = 0f
+    private var earthquakeAnimator: ValueAnimator? = null
+    private var earthquakeProgress = 0f
     private var gameOver = false
     private var levelComplete = false
 
@@ -292,6 +295,15 @@ class GameView @JvmOverloads constructor(
             return
         }
 
+        canvas.save()
+        if (earthquakeProgress > 0f) {
+            val damping = 1f - earthquakeProgress
+            val phase = earthquakeProgress * Math.PI * 18.0
+            val shakeX = sin(phase).toFloat() * dp(7f) * damping
+            val shakeY = cos(phase * 1.17).toFloat() * dp(4f) * damping
+            canvas.translate(shakeX, shakeY)
+        }
+
         drawHeader(canvas)
         drawBoardPanel(canvas)
 
@@ -347,6 +359,8 @@ class GameView @JvmOverloads constructor(
         if (gameOver || levelComplete) {
             drawResultOverlay(canvas)
         }
+
+        canvas.restore()
     }
 
     private fun drawHeader(canvas: Canvas) {
@@ -436,8 +450,6 @@ class GameView @JvmOverloads constructor(
 
         canvas.save()
         canvas.translate(centerX, centerY)
-
-        val rect = RectF(-half, -half, half, half)
         candyPaint.shader = null
 
         if (type == Candy.BOMB_TYPE) {
@@ -446,78 +458,207 @@ class GameView @JvmOverloads constructor(
             return
         }
 
-        candyPaint.color = palette[type % palette.size]
-
         when (type) {
-            1, 4, 5 -> canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
-            2 -> canvas.drawPath(diamondPath(half * 0.96f), candyPaint)
-            3 -> canvas.drawPath(hexagonPath(half * 0.94f), candyPaint)
-            else -> canvas.drawRoundRect(
-                rect,
-                half * 0.26f,
-                half * 0.26f,
-                candyPaint
-            )
+            0 -> drawWrappedCandy(canvas, half, palette[type])
+            1 -> drawGlossyRoundCandy(canvas, half, palette[type])
+            2 -> drawGemCandy(canvas, half, palette[type])
+            3 -> drawHexCandy(canvas, half, palette[type])
+            4 -> drawSwirlCandy(canvas, half, palette[type])
+            else -> drawPillCandy(canvas, half, palette[type])
         }
 
-        candyEdgePaint.color = Color.argb(100, 255, 255, 255)
-        when (type) {
-            1, 4, 5 -> canvas.drawCircle(0f, 0f, half * 0.92f, candyEdgePaint)
-            2 -> canvas.drawPath(diamondPath(half * 0.96f), candyEdgePaint)
-            3 -> canvas.drawPath(hexagonPath(half * 0.94f), candyEdgePaint)
-            else -> canvas.drawRoundRect(
-                rect,
-                half * 0.26f,
-                half * 0.26f,
-                candyEdgePaint
-            )
-        }
-
-        val highlight = RectF(
-            -half * 0.48f,
-            -half * 0.48f,
-            -half * 0.02f,
-            -half * 0.10f
-        )
-        canvas.drawOval(highlight, candyHighlightPaint)
-
-        val glint = Path().apply {
-            moveTo(-half * 0.28f, -half * 0.08f)
-            lineTo(half * 0.18f, -half * 0.36f)
-        }
-        candyEdgePaint.color = Color.argb(150, 255, 255, 255)
-        candyEdgePaint.strokeWidth = dp(1.3f)
-        canvas.drawPath(glint, candyEdgePaint)
+        drawCandyHighlight(canvas, half)
 
         if (selected) {
-            when (type) {
-                Candy.BOMB_TYPE -> canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
-                2 -> canvas.drawPath(diamondPath(half + dp(4f)), selectionPaint)
-                3 -> canvas.drawPath(hexagonPath(half + dp(4f)), selectionPaint)
-                1, 4, 5 -> canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
-                else -> {
-                    val selectionRect = RectF(
-                        -half - dp(4f),
-                        -half - dp(4f),
-                        half + dp(4f),
-                        half + dp(4f)
-                    )
-                    canvas.drawRoundRect(
-                        selectionRect,
-                        dp(10f),
-                        dp(10f),
-                        selectionPaint
-                    )
-                }
-            }
+            canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
         }
 
         canvas.restore()
     }
 
-    private fun drawBombCandy(canvas: Canvas, half: Float) {
-        candyPaint.color = Color.rgb(46, 47, 56)
+    private fun drawWrappedCandy(canvas: Canvas, half: Float, color: Int) {
+        val body = RectF(-half * 0.66f, -half * 0.54f, half * 0.66f, half * 0.54f)
+        candyPaint.shader = RadialGradient(
+            -half * 0.25f,
+            -half * 0.38f,
+            half * 1.15f,
+            intArrayOf(Color.WHITE, lightenColor(color, 0.22f), color, darkenColor(color, 0.42f)),
+            floatArrayOf(0f, 0.18f, 0.62f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(body, half * 0.36f, half * 0.36f, candyPaint)
+        candyPaint.shader = null
+
+        val left = Path().apply {
+            moveTo(-half * 0.60f, -half * 0.40f)
+            lineTo(-half * 0.98f, -half * 0.68f)
+            lineTo(-half * 0.92f, half * 0.58f)
+            lineTo(-half * 0.60f, half * 0.38f)
+            close()
+        }
+        val right = Path().apply {
+            moveTo(half * 0.60f, -half * 0.40f)
+            lineTo(half * 0.98f, -half * 0.68f)
+            lineTo(half * 0.92f, half * 0.58f)
+            lineTo(half * 0.60f, half * 0.38f)
+            close()
+        }
+        candyPaint.shader = LinearGradient(
+            0f, -half, 0f, half,
+            lightenColor(color, 0.10f),
+            darkenColor(color, 0.28f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(left, candyPaint)
+        canvas.drawPath(right, candyPaint)
+        candyPaint.shader = null
+
+        candyEdgePaint.color = Color.argb(130, 255, 255, 255)
+        candyEdgePaint.strokeWidth = dp(1.2f)
+        canvas.drawRoundRect(body, half * 0.36f, half * 0.36f, candyEdgePaint)
+    }
+
+    private fun drawGlossyRoundCandy(canvas: Canvas, half: Float, color: Int) {
+        candyPaint.shader = RadialGradient(
+            -half * 0.30f,
+            -half * 0.36f,
+            half * 1.25f,
+            intArrayOf(Color.WHITE, lightenColor(color, 0.24f), color, darkenColor(color, 0.45f)),
+            floatArrayOf(0f, 0.16f, 0.55f, 1f),
+            Shader.TileMode.CLAMP
+        )
         canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
+        candyPaint.shader = null
+        candyEdgePaint.color = Color.argb(120, 255, 255, 255)
+        canvas.drawCircle(0f, 0f, half * 0.92f, candyEdgePaint)
+    }
+
+    private fun drawGemCandy(canvas: Canvas, half: Float, color: Int) {
+        val path = diamondPath(half * 0.98f)
+        candyPaint.shader = LinearGradient(
+            -half, -half, half, half,
+            lightenColor(color, 0.26f),
+            darkenColor(color, 0.40f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(path, candyPaint)
+        candyPaint.shader = null
+
+        val inner = diamondPath(half * 0.62f)
+        candyPaint.color = Color.argb(70, 255, 255, 255)
+        canvas.drawPath(inner, candyPaint)
+        candyEdgePaint.color = Color.argb(135, 255, 255, 255)
+        canvas.drawPath(path, candyEdgePaint)
+    }
+
+    private fun drawHexCandy(canvas: Canvas, half: Float, color: Int) {
+        val path = hexagonPath(half * 0.94f)
+        candyPaint.shader = RadialGradient(
+            -half * 0.25f,
+            -half * 0.32f,
+            half * 1.10f,
+            intArrayOf(lightenColor(color, 0.22f), color, darkenColor(color, 0.44f)),
+            floatArrayOf(0f, 0.48f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(path, candyPaint)
+        candyPaint.shader = null
+        candyEdgePaint.color = Color.argb(135, 255, 255, 255)
+        canvas.drawPath(path, candyEdgePaint)
+    }
+
+    private fun drawSwirlCandy(canvas: Canvas, half: Float, color: Int) {
+        val body = RectF(-half * 0.90f, -half * 0.62f, half * 0.90f, half * 0.62f)
+        candyPaint.shader = RadialGradient(
+            -half * 0.30f,
+            -half * 0.30f,
+            half * 1.15f,
+            intArrayOf(Color.WHITE, lightenColor(color, 0.18f), color, darkenColor(color, 0.40f)),
+            floatArrayOf(0f, 0.18f, 0.58f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawOval(body, candyPaint)
+        candyPaint.shader = null
+
+        candyEdgePaint.color = Color.argb(170, 255, 255, 255)
+        candyEdgePaint.strokeWidth = dp(2f)
+        val swirl = Path().apply {
+            moveTo(-half * 0.55f, half * 0.05f)
+            cubicTo(
+                -half * 0.18f, -half * 0.48f,
+                half * 0.18f, half * 0.48f,
+                half * 0.55f, -half * 0.05f
+            )
+        }
+        canvas.drawPath(swirl, candyEdgePaint)
+    }
+
+    private fun drawPillCandy(canvas: Canvas, half: Float, color: Int) {
+        val body = RectF(-half * 0.64f, -half * 0.74f, half * 0.64f, half * 0.74f)
+        candyPaint.shader = LinearGradient(
+            -half, -half, half, half,
+            lightenColor(color, 0.24f),
+            darkenColor(color, 0.42f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(body, half * 0.30f, half * 0.30f, candyPaint)
+        candyPaint.shader = null
+
+        candyPaint.color = Color.argb(80, 255, 255, 255)
+        canvas.drawRoundRect(
+            RectF(-half * 0.50f, -half * 0.48f, half * 0.50f, -half * 0.08f),
+            half * 0.20f,
+            half * 0.20f,
+            candyPaint
+        )
+        candyEdgePaint.color = Color.argb(135, 255, 255, 255)
+        canvas.drawRoundRect(body, half * 0.30f, half * 0.30f, candyEdgePaint)
+    }
+
+    private fun drawCandyHighlight(canvas: Canvas, half: Float) {
+        candyHighlightPaint.alpha = 150
+        val highlight = RectF(
+            -half * 0.48f,
+            -half * 0.50f,
+            -half * 0.02f,
+            -half * 0.13f
+        )
+        canvas.drawOval(highlight, candyHighlightPaint)
+
+        candyHighlightPaint.alpha = 75
+        canvas.drawCircle(half * 0.30f, half * 0.34f, half * 0.12f, candyHighlightPaint)
+        candyHighlightPaint.alpha = 105
+    }
+
+    private fun lightenColor(color: Int, amount: Float): Int {
+        val factor = amount.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(color) + (255 - Color.red(color)) * factor).toInt(),
+            (Color.green(color) + (255 - Color.green(color)) * factor).toInt(),
+            (Color.blue(color) + (255 - Color.blue(color)) * factor).toInt()
+        )
+    }
+
+    private fun darkenColor(color: Int, amount: Float): Int {
+        val factor = (1f - amount.coerceIn(0f, 1f))
+        return Color.rgb(
+            (Color.red(color) * factor).toInt(),
+            (Color.green(color) * factor).toInt(),
+            (Color.blue(color) * factor).toInt()
+        )
+    }
+
+    private fun drawBombCandy(canvas: Canvas, half: Float) {
+        candyPaint.shader = RadialGradient(
+            -half * 0.28f,
+            -half * 0.34f,
+            half * 1.2f,
+            intArrayOf(Color.WHITE, Color.rgb(96, 98, 108), Color.rgb(46, 47, 56), Color.rgb(15, 16, 20)),
+            floatArrayOf(0f, 0.16f, 0.56f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
+        candyPaint.shader = null
 
         candyEdgePaint.color = Color.rgb(255, 188, 54)
         candyEdgePaint.strokeWidth = dp(2f)
@@ -1013,7 +1154,7 @@ class GameView @JvmOverloads constructor(
         explosionProgress = 0f
 
         bombAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 340L
+            duration = 3000L
             interpolator = android.view.animation.AccelerateDecelerateInterpolator()
 
             addUpdateListener {
@@ -1076,7 +1217,7 @@ class GameView @JvmOverloads constructor(
                     explosionCells = emptyList()
                     fallingCandies = emptyList()
                     invalidate()
-                    continueResolutionAnimation()
+                    startEarthquakeAnimation()
                 }
 
                 override fun onAnimationCancel(animation: Animator) {
@@ -1085,6 +1226,36 @@ class GameView @JvmOverloads constructor(
                     explosionCells = emptyList()
                     fallingCandies = emptyList()
                     fallingProgress = 0f
+                }
+            })
+            start()
+        }
+    }
+
+    private fun startEarthquakeAnimation() {
+        earthquakeAnimator?.cancel()
+        earthquakeProgress = 0f
+
+        earthquakeAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 720L
+            interpolator = android.view.animation.DecelerateInterpolator(1.2f)
+
+            addUpdateListener {
+                earthquakeProgress = it.animatedValue as Float
+                invalidate()
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    earthquakeAnimator = null
+                    earthquakeProgress = 0f
+                    invalidate()
+                    continueResolutionAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    earthquakeAnimator = null
+                    earthquakeProgress = 0f
                 }
             })
             start()
@@ -1247,7 +1418,9 @@ class GameView @JvmOverloads constructor(
 
                 if (swapAnimator?.isRunning == true ||
                     successAnimator?.isRunning == true ||
-                    fallingAnimator?.isRunning == true
+                    fallingAnimator?.isRunning == true ||
+                    bombAnimator?.isRunning == true ||
+                    earthquakeAnimator?.isRunning == true
                 ) {
                     return true
                 }
@@ -1393,16 +1566,19 @@ class GameView @JvmOverloads constructor(
         successAnimator?.cancel()
         fallingAnimator?.cancel()
         bombAnimator?.cancel()
+        earthquakeAnimator?.cancel()
         swapAnimator = null
         successAnimator = null
         fallingAnimator = null
         bombAnimator = null
+        earthquakeAnimator = null
         fallingCandies = emptyList()
         fallingProgress = 0f
         bombCell = null
         bombProgress = 0f
         explosionCells = emptyList()
         explosionProgress = 0f
+        earthquakeProgress = 0f
         successPulse = 0f
         swapProgress = 0f
         clearMovingState()
