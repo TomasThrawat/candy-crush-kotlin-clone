@@ -464,7 +464,41 @@ class GameView @JvmOverloads constructor(
             drawBomb(canvas, cx, cy, size, alpha)
         } else if (type == Candy.ROCKET_TYPE) {
             drawRocket(canvas, cx, cy, size, alpha, specialDirection)
+        } else if (type == Candy.COLOR_BOMB_TYPE) {
+            drawColorBomb(canvas, cx, cy, size, alpha)
         }
+    }
+
+    private fun drawColorBomb(canvas: Canvas, cx: Float, cy: Float, size: Float, alpha: Int) {
+        val core = Color.rgb(38, 34, 48)
+        boardPaint.color = Color.argb(alpha, Color.red(core), Color.green(core), Color.blue(core))
+        canvas.drawCircle(cx, cy, size * 0.36f, boardPaint)
+
+        val colors = Candy.PALETTE
+        for (i in colors.indices) {
+            val angle = Math.toRadians(-90.0 + i * 60.0)
+            val px = cx + cos(angle).toFloat() * size * 0.25f
+            val py = cy + sin(angle).toFloat() * size * 0.25f
+            val c = colors[i]
+            boardPaint.color = Color.argb(alpha, Color.red(c), Color.green(c), Color.blue(c))
+            canvas.drawCircle(px, py, size * 0.07f, boardPaint)
+        }
+
+        boardPaint.color = Color.argb((alpha * 0.92f).toInt(), 255, 255, 255)
+        canvas.drawOval(
+            RectF(
+                cx - size * 0.23f,
+                cy - size * 0.27f,
+                cx - size * 0.02f,
+                cy - size * 0.10f
+            ),
+            boardPaint
+        )
+
+        outlinePaint.style = Paint.Style.STROKE
+        outlinePaint.strokeWidth = size * 0.028f
+        outlinePaint.color = Color.argb((alpha * 0.9f).toInt(), 255, 223, 126)
+        canvas.drawCircle(cx, cy, size * 0.365f, outlinePaint)
     }
 
     private fun drawCandyShape(
@@ -1115,7 +1149,7 @@ class GameView @JvmOverloads constructor(
         lastActionTime = now
         matchProgress = 0f
 
-        emitParticles(cells, 7)
+        emitParticles(cells, if (board.pendingMatchCells().size >= 12) 5 else 7)
         sound.playMatch(combo)
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
 
@@ -1148,7 +1182,13 @@ class GameView @JvmOverloads constructor(
                         floatingTexts += FloatingText(
                             cx,
                             boardTop + dp(17f),
-                            if (step.specialType == Candy.BOMB_TYPE) "BOMB CREATED" else "ROCKET CREATED",
+                            when (step.specialType) {
+                                Candy.COLOR_BOMB_TYPE -> {
+                                    if (step.specialActivated) "COLOR BLAST" else "COLOR BOMB CREATED"
+                                }
+                                Candy.BOMB_TYPE -> "BOMB CREATED"
+                                else -> "ROCKET CREATED"
+                            },
                             0.95f
                         )
                         emitParticles(setOf(step.specialCell), 15)
@@ -1245,6 +1285,37 @@ class GameView @JvmOverloads constructor(
         val candy = board.get(row, col) ?: return
 
         when (candy.type) {
+            Candy.COLOR_BOMB_TYPE -> {
+                val result = board.detonateColorBomb(row, col) ?: return
+                emitParticles(result.clearedCells.toSet(), 4)
+                floatingTexts += FloatingText(
+                    width / 2f,
+                    boardTop - dp(8f),
+                    "COLOR BLAST",
+                    0.95f
+                )
+                specialProgress = 0f
+                specialAnimator?.cancel()
+                specialAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 240L
+                    interpolator = DecelerateInterpolator()
+                    addUpdateListener {
+                        specialProgress = it.animatedValue as Float
+                        invalidate()
+                    }
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            specialAnimator = null
+                            emitParticles(setOf(row to col), 18)
+                            fallingCandies = result.fallingCandies
+                            if (fallingCandies.isNotEmpty()) startFallAnimation() else continueResolution()
+                        }
+                    })
+                    start()
+                }
+                sound.playReward()
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            }
             Candy.BOMB_TYPE -> {
                 val result = board.detonateBomb(row, col, 0, 1) ?: return
                 emitParticles(result.explosionCells.toSet(), 5)

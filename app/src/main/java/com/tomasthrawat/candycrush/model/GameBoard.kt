@@ -17,7 +17,8 @@ data class ResolveStep(
     val fallingCandies: List<FallingCandy>,
     val specialCell: Pair<Int, Int>? = null,
     val specialType: Int = -1,
-    val specialDirection: Int = 0
+    val specialDirection: Int = 0,
+    val specialActivated: Boolean = false
 )
 
 data class BombDetonation(
@@ -29,6 +30,14 @@ data class BombDetonation(
 data class RocketLaunch(
     val startCell: Pair<Int, Int>,
     val targetCell: Pair<Int, Int>,
+    val fallingCandies: List<FallingCandy>,
+    val affectedCount: Int
+)
+
+data class ColorBombDetonation(
+    val centerCell: Pair<Int, Int>,
+    val targetType: Int,
+    val clearedCells: List<Pair<Int, Int>>,
     val fallingCandies: List<FallingCandy>,
     val affectedCount: Int
 )
@@ -49,6 +58,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
     private var pendingSpecialCell: Pair<Int, Int>? = null
     private var pendingSpecialType: Int = -1
     private var pendingSpecialDirection: Int = 0
+    private var pendingSpecialActivated: Boolean = false
+    private var pendingColorBombTargetType: Int = -1
 
     init { reset() }
 
@@ -60,6 +71,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         pendingSpecialCell = null
         pendingSpecialType = -1
         pendingSpecialDirection = 0
+        pendingSpecialActivated = false
+        pendingColorBombTargetType = -1
         fillFreshPlayableBoard()
     }
 
@@ -84,7 +97,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         for (r in 0 until rows) {
             for (c in 0 until cols) {
                 val type = snapshot[i++]
-                board[r][c] = if (type in 0..Candy.ROCKET_TYPE) Candy(type, r, c) else Candy(Random.nextInt(Candy.NUM_TYPES), r, c)
+                board[r][c] = if (type in 0..Candy.COLOR_BOMB_TYPE) Candy(type, r, c) else Candy(Random.nextInt(Candy.NUM_TYPES), r, c)
             }
         }
         score = savedScore.coerceAtLeast(0)
@@ -94,6 +107,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         pendingSpecialCell = null
         pendingSpecialType = -1
         pendingSpecialDirection = 0
+        pendingSpecialActivated = false
+        pendingColorBombTargetType = -1
         if (findMatches().isNotEmpty() || !hasPossibleMove()) {
             fillFreshPlayableBoard()
             score = savedScore.coerceAtLeast(0)
@@ -108,6 +123,33 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
         val a = get(r1, c1) ?: return false
         val b = get(r2, c2) ?: return false
+
+        val aIsColorBomb = a.type == Candy.COLOR_BOMB_TYPE
+        val bIsColorBomb = b.type == Candy.COLOR_BOMB_TYPE
+        if (aIsColorBomb || bIsColorBomb) {
+            board[r1][c1] = Candy(b.type, r1, c1, b.specialDirection)
+            board[r2][c2] = Candy(a.type, r2, c2, a.specialDirection)
+
+            movesLeft--
+            val bombRow = if (aIsColorBomb) r2 else r1
+            val bombCol = if (aIsColorBomb) c2 else c1
+            val target = if (aIsColorBomb) b.type else a.type
+
+            val targetType = if (target in 0 until Candy.NUM_TYPES) {
+                target
+            } else {
+                -1
+            }
+
+            pendingSpecialCell = bombRow to bombCol
+            pendingSpecialType = Candy.COLOR_BOMB_TYPE
+            pendingSpecialDirection = targetType
+            pendingSpecialActivated = true
+            pendingColorBombTargetType = targetType
+            pendingMatches = collectColorBombCells(bombRow, bombCol, targetType)
+            return true
+        }
+
         board[r1][c1] = Candy(b.type, r1, c1, b.specialDirection)
         board[r2][c2] = Candy(a.type, r2, c2, a.specialDirection)
 
@@ -119,6 +161,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         }
 
         movesLeft--
+        pendingSpecialActivated = false
+        pendingColorBombTargetType = -1
         val special = chooseSpecial(matches, r1, c1, r2, c2, requestedRocketDirection)
         pendingSpecialCell = special?.first
         pendingSpecialType = special?.second ?: -1
@@ -141,6 +185,8 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         pendingSpecialCell = null
         pendingSpecialType = -1
         pendingSpecialDirection = 0
+        pendingSpecialActivated = false
+        pendingColorBombTargetType = -1
         pendingMatches = matches
         return true
     }
@@ -152,15 +198,18 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         val specialCell = pendingSpecialCell
         val specialType = pendingSpecialType
         val specialDirection = pendingSpecialDirection
+        val specialActivated = pendingSpecialActivated
 
         pendingMatches = emptySet()
         pendingSpecialCell = null
         pendingSpecialType = -1
         pendingSpecialDirection = 0
+        pendingSpecialActivated = false
+        pendingColorBombTargetType = -1
 
-        if (matches.isEmpty()) return ResolveStep(0, emptySet(), emptyList(), specialCell, specialType, specialDirection)
+        if (matches.isEmpty()) return ResolveStep(0, emptySet(), emptyList(), specialCell, specialType, specialDirection, specialActivated)
 
-        score += matches.size * 30
+        score += matches.size * if (specialActivated) 32 else 30
         for ((r, c) in matches) board[r][c] = null
         val falling = compactAndRefill(specialCell)
 
@@ -170,8 +219,91 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             fallingCandies = falling,
             specialCell = specialCell,
             specialType = specialType,
-            specialDirection = specialDirection
+            specialDirection = specialDirection,
+            specialActivated = specialActivated
         )
+    }
+
+    fun detonateColorBomb(row: Int, col: Int, requestedType: Int = -1): ColorBombDetonation? {
+        val bomb = get(row, col) ?: return null
+        if (bomb.type != Candy.COLOR_BOMB_TYPE) return null
+
+        val targetType = if (requestedType in 0 until Candy.NUM_TYPES) {
+            requestedType
+        } else {
+            mostCommonNormalType()
+        }
+        val cells = collectColorBombCells(row, col, targetType)
+
+        var affected = 0
+        for ((r, c) in cells) {
+            if (board[r][c] != null) {
+                board[r][c] = null
+                affected++
+            }
+        }
+        score += affected * 32
+
+        return ColorBombDetonation(
+            centerCell = row to col,
+            targetType = targetType,
+            clearedCells = cells.toList(),
+            fallingCandies = compactAndRefill(),
+            affectedCount = affected
+        )
+    }
+
+    private fun collectColorBombCells(row: Int, col: Int, targetType: Int): LinkedHashSet<Pair<Int, Int>> {
+        val cells = LinkedHashSet<Pair<Int, Int>>()
+        val sameType = targetType in 0 until Candy.NUM_TYPES
+
+        if (sameType) {
+            for (r in 0 until rows) {
+                for (c in 0 until cols) {
+                    if (board[r][c]?.type == targetType) {
+                        cells += r to c
+                        for (dr in -1..1) {
+                            for (dc in -1..1) {
+                                val nr = r + dr
+                                val nc = c + dc
+                                if (nr in 0 until rows && nc in 0 until cols) {
+                                    cells += nr to nc
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            for (r in 0 until rows) {
+                for (c in 0 until cols) {
+                    if (board[r][c] != null) cells += r to c
+                }
+            }
+        }
+
+        cells += row to col
+        return cells
+    }
+
+    private fun mostCommonNormalType(): Int {
+        val counts = IntArray(Candy.NUM_TYPES)
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val type = board[r][c]?.type ?: continue
+                if (type in 0 until Candy.NUM_TYPES) counts[type]++
+            }
+        }
+
+        var bestType = 0
+        var bestCount = -1
+        for (type in 0 until Candy.NUM_TYPES) {
+            if (counts[type] > bestCount) {
+                bestCount = counts[type]
+                bestType = type
+            }
+        }
+        return bestType
     }
 
     fun detonateBomb(row: Int, col: Int, directionRow: Int, directionCol: Int): BombDetonation? {
@@ -332,6 +464,18 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         c2: Int,
         requestedRocketDirection: Int
     ): Triple<Pair<Int, Int>, Int, Int>? {
+        val sixHorizontal = matches.filter { hasRunAtLeast(it.first, it.second, true, 6, matches) }
+        val sixVertical = matches.filter { hasRunAtLeast(it.first, it.second, false, 6, matches) }
+        if (sixHorizontal.isNotEmpty() || sixVertical.isNotEmpty()) {
+            val candidates = if (sixHorizontal.isNotEmpty()) sixHorizontal else sixVertical
+            val cell = when {
+                r1 to c1 in candidates -> r1 to c1
+                r2 to c2 in candidates -> r2 to c2
+                else -> candidates[candidates.size / 2]
+            }
+            return Triple(cell, Candy.COLOR_BOMB_TYPE, 0)
+        }
+
         if (matches.size >= 5) {
             val intersection = matches.firstOrNull { cell ->
                 hasRunAtLeast(cell.first, cell.second, true, 3, matches) &&
