@@ -21,12 +21,12 @@ data class Candy(
         const val BOMB_TYPE = NUM_TYPES
 
         val PALETTE = intArrayOf(
-            Color.parseColor("#FFA6C2"),
-            Color.parseColor("#FFE08A"),
-            Color.parseColor("#A6E7C2"),
-            Color.parseColor("#A4D3FF"),
-            Color.parseColor("#D3BBF6"),
-            Color.parseColor("#FFC091")
+            Color.parseColor("#FFF8E8"),
+            Color.parseColor("#9DD3F7"),
+            Color.parseColor("#F4C95D"),
+            Color.parseColor("#FFD8AD"),
+            Color.parseColor("#C3E1F8"),
+            Color.parseColor("#E8CA89")
         )
     }
 }
