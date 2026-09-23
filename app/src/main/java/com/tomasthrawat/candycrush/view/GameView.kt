@@ -111,13 +111,14 @@ class GameView @JvmOverloads constructor(
         color = Color.argb(230, 16, 22, 41)
     }
 
+    // Cozy family palette: ivory, sky blue, warm gold, peach cream, powder blue, and honey.
     private val palette = intArrayOf(
-        Color.rgb(255, 166, 194),
-        Color.rgb(255, 224, 138),
-        Color.rgb(166, 231, 194),
-        Color.rgb(164, 211, 255),
-        Color.rgb(211, 187, 246),
-        Color.rgb(255, 192, 145)
+        Color.rgb(255, 248, 232),
+        Color.rgb(157, 211, 247),
+        Color.rgb(244, 201, 93),
+        Color.rgb(255, 216, 173),
+        Color.rgb(195, 225, 248),
+        Color.rgb(232, 202, 137)
     )
 
     private var boardLeft = 0f
