@@ -1,10 +1,10 @@
 package com.tomasthrawat.candycrush.view
 
+import com.tomasthrawat.candycrush.R
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -12,7 +12,6 @@ import android.graphics.RectF
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.RectF
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.view.MotionEvent
