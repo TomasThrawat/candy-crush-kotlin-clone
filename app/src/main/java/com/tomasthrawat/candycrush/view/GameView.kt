@@ -298,7 +298,7 @@ class GameView @JvmOverloads constructor(
         return 180 + pattern * 35
     }
 
-    private fun movesForLevel(level: Long): Int = Int.MAX_VALUE
+    private fun movesForLevel(_level: Long): Int = Int.MAX_VALUE
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)

@@ -49,7 +49,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         reset()
     }
 
-    fun reset(moves: Int = 20) {
+    fun reset(_moves: Int = 20) {
         score = 0
         movesLeft = Int.MAX_VALUE
         pendingMatches = emptySet()
@@ -299,7 +299,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         }
     }
 
-    fun addMoves(amount: Int) {
+    fun addMoves(_amount: Int) {
         movesLeft = Int.MAX_VALUE
     }
 
