@@ -229,6 +229,9 @@ class GameView @JvmOverloads constructor(
     private var levelTransitionRunning = false
 
     init {
+        textPaint.textAlign = Paint.Align.CENTER
+        secondaryTextPaint.textAlign = Paint.Align.CENTER
+        accentTextPaint.textAlign = Paint.Align.CENTER
         isClickable = true
         overScrollMode = OVER_SCROLL_NEVER
         backgroundPaint.shader = LinearGradient(
@@ -326,8 +329,8 @@ class GameView @JvmOverloads constructor(
             0f,
             0f,
             h.toFloat().coerceAtLeast(1f),
-            Color.rgb(34, 22, 61),
-            Color.rgb(17, 32, 57),
+            Color.rgb(42, 23, 76),
+            Color.rgb(17, 34, 61),
             Shader.TileMode.CLAMP
         )
 
@@ -335,15 +338,15 @@ class GameView @JvmOverloads constructor(
         secondaryTextPaint.textSize = dp(13f)
         accentTextPaint.textSize = dp(18f)
         levelChipRect = RectF(
-            width / 2f - dp(86f),
-            dp(59f),
-            width / 2f + dp(86f),
-            dp(84f)
+            width / 2f - dp(96f),
+            dp(60f),
+            width / 2f + dp(96f),
+            dp(86f)
         )
 
-        val helperGap = dp(6f)
+        val helperGap = dp(7f)
         val helperWidth = (width - dp(24f) - helperGap * 2f) / 3f
-        val helperTop = dp(123f)
+        val helperTop = dp(124f)
         val helperBottom = dp(160f)
         helperHammerRect = RectF(dp(12f), helperTop, dp(12f) + helperWidth, helperBottom)
         helperCrossRect = RectF(
@@ -359,9 +362,9 @@ class GameView @JvmOverloads constructor(
             helperBottom
         )
 
-        menuPlayRect = RectF(width * 0.14f, height * 0.34f, width * 0.86f, height * 0.44f)
-        menuShopRect = RectF(width * 0.14f, height * 0.47f, width * 0.86f, height * 0.57f)
-        menuHelpersRect = RectF(width * 0.14f, height * 0.60f, width * 0.86f, height * 0.70f)
+        menuPlayRect = RectF(width * 0.13f, height * 0.40f, width * 0.87f, height * 0.49f)
+        menuShopRect = RectF(width * 0.13f, height * 0.51f, width * 0.87f, height * 0.60f)
+        menuHelpersRect = RectF(width * 0.13f, height * 0.62f, width * 0.87f, height * 0.71f)
 
         gameMenuRect = RectF(width - dp(72f), dp(12f), width - dp(12f), dp(52f))
         val gameMenuBoxWidth = min(width * 0.78f, dp(330f))
@@ -386,9 +389,9 @@ class GameView @JvmOverloads constructor(
         )
 
         screenBackRect = RectF(dp(12f), dp(14f), dp(104f), dp(52f))
-        shopHammerRect = RectF(width * 0.10f, height * 0.24f, width * 0.90f, height * 0.34f)
-        shopCrossRect = RectF(width * 0.10f, height * 0.37f, width * 0.90f, height * 0.47f)
-        shopMovesRect = RectF(width * 0.10f, height * 0.50f, width * 0.90f, height * 0.60f)
+        shopHammerRect = RectF(width * 0.08f, height * 0.22f, width * 0.92f, height * 0.33f)
+        shopCrossRect = RectF(width * 0.08f, height * 0.36f, width * 0.92f, height * 0.47f)
+        shopMovesRect = RectF(width * 0.08f, height * 0.50f, width * 0.92f, height * 0.61f)
 
         levelScrollY = clampMapScroll(levelScrollY)
     }
@@ -505,117 +508,187 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawHeader(canvas: Canvas) {
-        drawPeppermintCandyJar(canvas)
-        canvas.drawText("CANDY RUSH", width / 2f, dp(33f), textPaint)
-
-        val subtitle = when {
-            levelComplete -> "Swipe up for the next level"
-            gameOver -> "Swipe down to retry or up when unlocked"
-            else -> "Swipe a candy to swap â¢ tap the level for the map"
-        }
-        canvas.drawText(subtitle, width / 2f, dp(55f), secondaryTextPaint)
-
-        val chipRadius = dp(13f)
-        cardPaint.color = Color.argb(58, 255, 255, 255)
+        val topShade = RectF(0f, 0f, width.toFloat(), headerHeight)
+        cardPaint.color = Color.argb(22, 255, 255, 255)
         canvas.drawRoundRect(
-            levelChipRect,
-            chipRadius,
-            chipRadius,
+            topShade.left,
+            topShade.top,
+            topShade.right,
+            topShade.bottom + dp(20f),
+            dp(28f),
+            dp(28f),
             cardPaint
         )
+
+        drawPeppermintCandyJar(canvas)
+
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.color = Color.WHITE
+        textPaint.textSize = dp(25f)
+        canvas.drawText("CANDY RUSH", width / 2f, dp(31f), textPaint)
+
+        secondaryTextPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.NORMAL)
+        secondaryTextPaint.color = Color.argb(205, 255, 255, 255)
+        secondaryTextPaint.textSize = dp(12f)
         canvas.drawText(
-            "LEVEL " + currentLevel + "  â¢  TARGET " + targetScoreForLevel(currentLevel),
-            levelChipRect.centerX(),
-            dp(77f),
-            accentTextPaint
-        )
-
-        val chipWidth = dp(128f)
-        val chipHeight = dp(25f)
-        val chipY = dp(92f)
-        val radius = chipHeight / 2f
-
-        val scoreRect = RectF(
-            width / 2f - chipWidth - dp(6f),
-            chipY,
-            width / 2f - dp(6f),
-            chipY + chipHeight
-        )
-        val movesRect = RectF(
-            width / 2f + dp(6f),
-            chipY,
-            width / 2f + chipWidth + dp(6f),
-            chipY + chipHeight
-        )
-
-        cardPaint.color = Color.argb(58, 255, 255, 255)
-        canvas.drawRoundRect(scoreRect, radius, radius, cardPaint)
-        canvas.drawRoundRect(movesRect, radius, radius, cardPaint)
-
-        canvas.drawText(
-            "SCORE  " + board.score,
-            scoreRect.centerX(),
-            chipY + dp(18f),
-            accentTextPaint
-        )
-        canvas.drawText(
-            "MOVES  â",
-            movesRect.centerX(),
-            chipY + dp(18f),
+            "Cozy match-3 adventure",
+            width / 2f,
+            dp(51f),
             secondaryTextPaint
         )
 
+        cardPaint.color = Color.argb(105, 255, 246, 220)
+        canvas.drawRoundRect(levelChipRect, dp(14f), dp(14f), cardPaint)
+        accentTextPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        accentTextPaint.color = Color.rgb(67, 39, 79)
+        accentTextPaint.textSize = dp(13f)
+        canvas.drawText(
+            "LEVEL " + currentLevel,
+            levelChipRect.centerX(),
+            levelChipRect.centerY() + dp(4f),
+            accentTextPaint
+        )
+
+        val statY = dp(94f)
+        val statH = dp(27f)
+        val statGap = dp(7f)
+        val statW = min(dp(130f), (width - dp(56f)) / 2f)
+        val left = width / 2f - statW - statGap / 2f
+        val right = width / 2f + statGap / 2f
+        val scoreRect = RectF(left, statY, left + statW, statY + statH)
+        val movesRect = RectF(right, statY, right + statW, statY + statH)
+
+        drawHudChip(canvas, scoreRect, "SCORE", board.score.toString(), Color.rgb(255, 223, 109))
+        drawHudChip(canvas, movesRect, "MOVES", "INF", Color.rgb(151, 220, 255))
+
+        secondaryTextPaint.textSize = dp(10f)
+        secondaryTextPaint.color = Color.argb(165, 255, 255, 255)
+        val subtitle = when {
+            levelComplete -> "Level complete - swipe up for the next level"
+            gameOver -> "Tap to retry this level"
+            else -> "Swipe to match - tap Level to open the map"
+        }
+        canvas.drawText(subtitle, width / 2f, dp(119f), secondaryTextPaint)
+
         drawGameMenuButton(canvas)
+    }
+
+    private fun drawHudChip(canvas: Canvas, rect: RectF, label: String, value: String, valueColor: Int) {
+        cardPaint.color = Color.argb(58, 255, 255, 255)
+        canvas.drawRoundRect(rect, dp(13f), dp(13f), cardPaint)
+        secondaryTextPaint.textSize = dp(9f)
+        secondaryTextPaint.color = Color.argb(165, 255, 255, 255)
+        textPaint.textSize = dp(12f)
+        textPaint.color = valueColor
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        canvas.drawText(label, rect.left + dp(24f), rect.centerY() + dp(3f), secondaryTextPaint)
+        canvas.drawText(value, rect.centerX() + dp(17f), rect.centerY() + dp(4f), textPaint)
     }
 
     private fun drawPeppermintCandyJar(canvas: Canvas) {
         val bitmap = peppermintCandyJarBitmap
         if (bitmap.isRecycled) return
 
-        val size = dp(46f)
-        val left = dp(12f)
-        val top = dp(9f)
+        val size = dp(52f)
+        val left = dp(10f)
+        val top = dp(8f)
         val dst = RectF(left, top, left + size, top + size)
 
-        cardPaint.color = Color.argb(45, 255, 255, 255)
+        cardPaint.color = Color.argb(55, 255, 246, 220)
         canvas.drawRoundRect(
-            RectF(
-                left - dp(2f),
-                top - dp(2f),
-                left + size + dp(2f),
-                top + size + dp(2f)
-            ),
-            dp(12f),
-            dp(12f),
+            RectF(left - dp(3f), top - dp(3f), left + size + dp(3f), top + size + dp(3f)),
+            dp(15f),
+            dp(15f),
             cardPaint
         )
-
         candyPaint.alpha = 255
         canvas.drawBitmap(bitmap, null, dst, candyPaint)
+
+        sparklePaint.color = Color.argb(180, 255, 226, 120)
+        drawTinyStar(canvas, left + size + dp(2f), top + dp(8f), dp(3f))
+        drawTinyStar(canvas, left + size - dp(2f), top + size - dp(6f), dp(2.2f))
     }
 
     private fun drawGameMenuButton(canvas: Canvas) {
-        cardPaint.color = Color.argb(68, 255, 255, 255)
+        cardPaint.color = Color.argb(60, 255, 246, 220)
         canvas.drawRoundRect(gameMenuRect, dp(13f), dp(13f), cardPaint)
-        val left = gameMenuRect.centerX() - dp(12f)
-        val right = gameMenuRect.centerX() + dp(12f)
-        val y1 = gameMenuRect.centerY() - dp(6f)
-        val y2 = gameMenuRect.centerY()
-        val y3 = gameMenuRect.centerY() + dp(6f)
-        canvas.drawRoundRect(left, y1, right, y1 + dp(2f), dp(1f), dp(1f), accentTextPaint)
-        canvas.drawRoundRect(left, y2, right, y2 + dp(2f), dp(1f), dp(1f), accentTextPaint)
-        canvas.drawRoundRect(left, y3, right, y3 + dp(2f), dp(1f), dp(1f), accentTextPaint)
+        val cx = gameMenuRect.centerX()
+        val cy = gameMenuRect.centerY()
+        accentTextPaint.color = Color.rgb(255, 223, 109)
+        accentTextPaint.strokeWidth = dp(2f)
+        for (offset in -1..1) {
+            canvas.drawRoundRect(
+                cx - dp(10f),
+                cy + offset * dp(6f) - dp(1f),
+                cx + dp(10f),
+                cy + offset * dp(6f) + dp(1f),
+                dp(1f),
+                dp(1f),
+                accentTextPaint
+            )
+        }
     }
 
     private fun drawBoardPanel(canvas: Canvas) {
-        val panel = RectF(
-            boardLeft - dp(7f),
-            boardTop - dp(7f),
-            boardLeft + boardSize + dp(7f),
-            boardTop + boardSize + dp(7f)
+        val outer = RectF(
+            boardLeft - dp(10f),
+            boardTop - dp(10f),
+            boardLeft + boardSize + dp(10f),
+            boardTop + boardSize + dp(10f)
         )
-        canvas.drawRoundRect(panel, dp(22f), dp(22f), boardPaint)
-        canvas.drawRoundRect(panel, dp(22f), dp(22f), boardBorderPaint)
+        cardPaint.color = Color.argb(110, 6, 9, 25)
+        canvas.drawRoundRect(
+            RectF(outer.left + dp(2f), outer.top + dp(5f), outer.right + dp(2f), outer.bottom + dp(5f)),
+            dp(25f),
+            dp(25f),
+            cardPaint
+        )
+
+        boardPaint.shader = LinearGradient(
+            outer.left,
+            outer.top,
+            outer.right,
+            outer.bottom,
+            Color.rgb(35, 35, 64),
+            Color.rgb(20, 24, 46),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRoundRect(outer, dp(25f), dp(25f), boardPaint)
+        boardPaint.shader = null
+
+        boardBorderPaint.color = Color.argb(150, 255, 228, 151)
+        boardBorderPaint.strokeWidth = dp(1.5f)
+        canvas.drawRoundRect(outer, dp(25f), dp(25f), boardBorderPaint)
+
+        for (r in 0 until board.rows) {
+            for (c in 0 until board.cols) {
+                val cx = cellCenter(r, c).first
+                val cy = cellCenter(r, c).second
+                val inset = dp(2.2f)
+                val tile = RectF(
+                    cx - cellSize / 2f + inset,
+                    cy - cellSize / 2f + inset,
+                    cx + cellSize / 2f - inset,
+                    cy + cellSize / 2f - inset
+                )
+                cardPaint.color = if ((r + c) % 2 == 0) {
+                    Color.argb(34, 255, 255, 255)
+                } else {
+                    Color.argb(20, 255, 255, 255)
+                }
+                canvas.drawRoundRect(tile, dp(10f), dp(10f), cardPaint)
+            }
+        }
+
+        val inner = RectF(
+            boardLeft + dp(2f),
+            boardTop + dp(2f),
+            boardLeft + boardSize - dp(2f),
+            boardTop + boardSize - dp(2f)
+        )
+        boardBorderPaint.color = Color.argb(38, 255, 255, 255)
+        boardBorderPaint.strokeWidth = dp(1f)
+        canvas.drawRoundRect(inner, dp(20f), dp(20f), boardBorderPaint)
     }
 
     private fun drawCandy(
@@ -985,31 +1058,25 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawGameMenuOverlay(canvas: Canvas) {
-        val overlay = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(155, 8, 10, 20)
-        }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), overlay)
-
+        canvas.drawColor(Color.argb(150, 8, 10, 20))
         val boxWidth = min(width * 0.86f, dp(350f))
         val box = RectF(
             width / 2f - boxWidth / 2f,
-            height * 0.25f,
+            height * 0.23f,
             width / 2f + boxWidth / 2f,
             height * 0.80f
         )
-        cardPaint.color = Color.argb(242, 31, 35, 53)
-        canvas.drawRoundRect(box, dp(24f), dp(24f), cardPaint)
-        canvas.drawRoundRect(box, dp(24f), dp(24f), boardBorderPaint)
-
+        drawWarmPanel(canvas, box, 255)
         textPaint.textSize = dp(25f)
-        textPaint.color = Color.WHITE
-        canvas.drawText("GAME MENU", box.centerX(), box.top + dp(54f), textPaint)
+        textPaint.color = Color.rgb(67, 39, 79)
+        canvas.drawText("GAME MENU", box.centerX(), box.top + dp(52f), textPaint)
 
         secondaryTextPaint.textSize = dp(12f)
+        secondaryTextPaint.color = Color.rgb(92, 75, 102)
         canvas.drawText(
-            "Restart this level or return to the main menu.",
+            "Choose what to do next",
             box.centerX(),
-            box.top + dp(80f),
+            box.top + dp(77f),
             secondaryTextPaint
         )
 
@@ -1019,20 +1086,16 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawResultOverlay(canvas: Canvas) {
-        val overlay = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(125, 8, 10, 20)
-        }
-        canvas.drawRect(0f, headerHeight, width.toFloat(), height.toFloat(), overlay)
-
+        canvas.drawRect(0f, headerHeight, width.toFloat(), height.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(120, 7, 9, 20)
+        })
         val box = RectF(
-            width / 2f - dp(145f),
-            boardTop + boardSize / 2f - dp(68f),
-            width / 2f + dp(145f),
-            boardTop + boardSize / 2f + dp(68f)
+            width / 2f - min(dp(165f), width * 0.42f),
+            boardTop + boardSize / 2f - dp(78f),
+            width / 2f + min(dp(165f), width * 0.42f),
+            boardTop + boardSize / 2f + dp(78f)
         )
-        cardPaint.color = Color.argb(238, 31, 35, 53)
-        canvas.drawRoundRect(box, dp(22f), dp(22f), cardPaint)
-        canvas.drawRoundRect(box, dp(22f), dp(22f), boardBorderPaint)
+        drawWarmPanel(canvas, box, 255)
 
         val title = if (levelComplete) {
             "LEVEL " + currentLevel + " COMPLETE"
@@ -1040,47 +1103,112 @@ class GameView @JvmOverloads constructor(
             "ROUND OVER"
         }
         val action = if (levelComplete) {
-            "Tap to play level " + (currentLevel + 1L)
+            "Tap for level " + (currentLevel + 1L)
         } else {
             "Tap to retry level " + currentLevel
         }
 
-        canvas.drawText(title, box.centerX(), box.centerY() - dp(14f), textPaint)
+        textPaint.textSize = dp(21f)
+        textPaint.color = Color.rgb(67, 39, 79)
+        canvas.drawText(title, box.centerX(), box.centerY() - dp(17f), textPaint)
+        secondaryTextPaint.textSize = dp(13f)
+        secondaryTextPaint.color = Color.rgb(92, 75, 102)
         canvas.drawText(action, box.centerX(), box.centerY() + dp(18f), secondaryTextPaint)
+        drawTinyStar(canvas, box.left + dp(25f), box.top + dp(25f), dp(5f))
+        drawTinyStar(canvas, box.right - dp(25f), box.top + dp(25f), dp(4f))
     }
 
     private fun drawMainMenu(canvas: Canvas) {
         val cx = width / 2f
+        val minSide = min(width, height).toFloat()
 
-        sparklePaint.color = Color.argb(42, 255, 255, 255)
-        canvas.drawCircle(cx, height * 0.22f, min(width, height) * 0.20f, sparklePaint)
+        // Soft candy-world glow
+        sparklePaint.color = Color.argb(30, 255, 242, 202)
+        canvas.drawCircle(cx, height * 0.24f, minSide * 0.30f, sparklePaint)
+        sparklePaint.color = Color.argb(24, 255, 183, 206)
+        canvas.drawCircle(width * 0.14f, height * 0.18f, dp(34f), sparklePaint)
+        sparklePaint.color = Color.argb(24, 159, 224, 255)
+        canvas.drawCircle(width * 0.86f, height * 0.22f, dp(40f), sparklePaint)
 
+        val jar = peppermintCandyJarBitmap
+        if (!jar.isRecycled) {
+            val size = min(dp(128f), width * 0.30f)
+            val dst = RectF(cx - size / 2f, height * 0.07f, cx + size / 2f, height * 0.07f + size)
+            cardPaint.color = Color.argb(42, 255, 246, 220)
+            canvas.drawRoundRect(
+                RectF(dst.left - dp(8f), dst.top - dp(8f), dst.right + dp(8f), dst.bottom + dp(8f)),
+                dp(28f),
+                dp(28f),
+                cardPaint
+            )
+            candyPaint.alpha = 255
+            canvas.drawBitmap(jar, null, dst, candyPaint)
+        }
+
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
         textPaint.color = Color.WHITE
-        textPaint.textSize = dp(38f)
-        canvas.drawText("CANDY RUSH", cx, height * 0.17f, textPaint)
+        textPaint.textSize = dp(39f)
+        canvas.drawText("CANDY RUSH", cx, height * 0.31f, textPaint)
 
-        accentTextPaint.textSize = dp(15f)
-        canvas.drawText("COZY MATCH â¢ ROCKETS â¢ HELPERS", cx, height * 0.215f, accentTextPaint)
+        accentTextPaint.color = Color.rgb(255, 223, 109)
+        accentTextPaint.textSize = dp(13f)
+        canvas.drawText("COZY PUZZLES  -  ROCKETS  -  BOOSTERS", cx, height * 0.35f, accentTextPaint)
 
-        secondaryTextPaint.textSize = dp(14f)
-        canvas.drawText(
-            "LEVEL " + currentLevel + "   â¢   COINS " + coins,
-            cx,
-            height * 0.265f,
-            secondaryTextPaint
-        )
+        drawMenuInfoChip(canvas, RectF(width * 0.22f, height * 0.37f, width * 0.78f, height * 0.415f))
 
         drawMenuButton(canvas, menuPlayRect, "PLAY")
         drawMenuButton(canvas, menuShopRect, "SHOP")
         drawMenuButton(canvas, menuHelpersRect, "HELPERS")
 
+        secondaryTextPaint.textSize = dp(11f)
+        secondaryTextPaint.color = Color.argb(175, 255, 255, 255)
+        canvas.drawText("Match 4 creates a rocket  -  Match 5 creates a bomb", cx, height * 0.78f, secondaryTextPaint)
+        canvas.drawText("Tip: use the level chip in-game to explore the map", cx, height * 0.815f, secondaryTextPaint)
+
+        drawTinyStar(canvas, width * 0.12f, height * 0.11f, dp(4f))
+        drawTinyStar(canvas, width * 0.88f, height * 0.14f, dp(5f))
+        drawTinyStar(canvas, width * 0.17f, height * 0.83f, dp(3f))
+        drawTinyStar(canvas, width * 0.83f, height * 0.84f, dp(3.5f))
+    }
+
+    private fun drawMenuInfoChip(canvas: Canvas, rect: RectF) {
+        cardPaint.color = Color.argb(42, 255, 246, 220)
+        canvas.drawRoundRect(rect, dp(16f), dp(16f), cardPaint)
         secondaryTextPaint.textSize = dp(12f)
+        secondaryTextPaint.color = Color.argb(195, 255, 255, 255)
         canvas.drawText(
-            "Match 4 = rocket  â¢  Match 5 = directional bomb",
-            cx,
-            height * 0.76f,
+            "LEVEL " + currentLevel + "   |   COINS " + coins,
+            rect.centerX(),
+            rect.centerY() + dp(4f),
             secondaryTextPaint
         )
+    }
+
+    private fun drawMenuButton(canvas: Canvas, rect: RectF, label: String) {
+        val primary = label == "PLAY"
+        cardPaint.color = Color.argb(if (primary) 255 else 220, 255, 246, 220)
+        canvas.drawRoundRect(
+            RectF(rect.left, rect.top + dp(5f), rect.right, rect.bottom + dp(5f)),
+            dp(20f),
+            dp(20f),
+            cardPaint
+        )
+
+        cardPaint.color = Color.argb(90, 6, 9, 25)
+        canvas.drawRoundRect(
+            RectF(rect.left + dp(2f), rect.top + dp(2f), rect.right + dp(2f), rect.bottom + dp(7f)),
+            dp(20f),
+            dp(20f),
+            cardPaint
+        )
+
+        cardPaint.color = if (primary) Color.rgb(255, 223, 109) else Color.rgb(255, 214, 194)
+        canvas.drawRoundRect(rect, dp(20f), dp(20f), cardPaint)
+
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.textSize = dp(if (primary) 21f else 18f)
+        textPaint.color = Color.rgb(67, 39, 79)
+        canvas.drawText(label, rect.centerX(), rect.centerY() + dp(7f), textPaint)
     }
 
     private fun drawMenuButton(canvas: Canvas, rect: RectF, label: String) {
@@ -1126,75 +1254,105 @@ class GameView @JvmOverloads constructor(
         )
     }
 
+    private fun drawShop(canvas: Canvas) {
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.textSize = dp(30f)
+        textPaint.color = Color.WHITE
+        canvas.drawText("HELPER SHOP", width / 2f, dp(44f), textPaint)
+
+        secondaryTextPaint.textSize = dp(12f)
+        secondaryTextPaint.color = Color.argb(190, 255, 255, 255)
+        canvas.drawText("Turn coins into useful moves", width / 2f, dp(67f), secondaryTextPaint)
+
+        drawCoinBadge(canvas, width / 2f, dp(94f), coins)
+
+        drawShopItem(canvas, shopHammerRect, "HAMMER", "Remove one candy", 40, helperCounts[0], 0)
+        drawShopItem(canvas, shopCrossRect, "CROSS BLAST", "Clear row + column", 60, helperCounts[1], 1)
+        drawShopItem(canvas, shopMovesRect, "UNLIMITED MOVES", "Moves never run out", 0, Int.MAX_VALUE, 2)
+
+        cardPaint.color = Color.argb(55, 255, 246, 220)
+        canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
+        secondaryTextPaint.textSize = dp(13f)
+        secondaryTextPaint.color = Color.WHITE
+        canvas.drawText("BACK", screenBackRect.centerX(), screenBackRect.centerY() + dp(4f), secondaryTextPaint)
+    }
+
+    private fun drawCoinBadge(canvas: Canvas, centerX: Float, centerY: Float, value: Int) {
+        val rect = RectF(centerX - dp(76f), centerY - dp(18f), centerX + dp(76f), centerY + dp(18f))
+        cardPaint.color = Color.argb(56, 255, 223, 109)
+        canvas.drawRoundRect(rect, dp(18f), dp(18f), cardPaint)
+        sparklePaint.color = Color.rgb(255, 223, 109)
+        canvas.drawCircle(rect.left + dp(22f), centerY, dp(7f), sparklePaint)
+        accentTextPaint.color = Color.rgb(255, 240, 183)
+        accentTextPaint.textSize = dp(15f)
+        canvas.drawText(value.toString(), centerX + dp(10f), centerY + dp(5f), accentTextPaint)
+    }
+
     private fun drawShopItem(
         canvas: Canvas,
         rect: RectF,
         title: String,
         subtitle: String,
         price: Int,
-        owned: Int
+        owned: Int,
+        iconType: Int
     ) {
-        cardPaint.color = Color.argb(78, 255, 255, 255)
-        canvas.drawRoundRect(rect, dp(18f), dp(18f), cardPaint)
+        drawWarmPanel(canvas, rect, 242)
+        drawHelperIcon(canvas, rect.left + dp(35f), rect.centerY(), iconType, dp(16f))
 
-        textPaint.textSize = dp(18f)
-        textPaint.color = Color.WHITE
-        canvas.drawText(title, rect.centerX(), rect.top + dp(31f), textPaint)
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.textSize = dp(17f)
+        textPaint.color = Color.rgb(67, 39, 79)
+        canvas.drawText(title, rect.left + dp(58f), rect.top + dp(31f), textPaint)
 
-        secondaryTextPaint.textSize = dp(12f)
-        val detail = if (title == "UNLIMITED MOVES") {
-            "Moves never run out â¢ â"
+        secondaryTextPaint.textAlign = Paint.Align.LEFT
+        secondaryTextPaint.textSize = dp(11f)
+        secondaryTextPaint.color = Color.rgb(92, 75, 102)
+        canvas.drawText(subtitle, rect.left + dp(58f), rect.bottom - dp(31f), secondaryTextPaint)
+
+        val rightText = if (title == "UNLIMITED MOVES") {
+            "READY"
         } else {
-            subtitle + " â¢ " + price + " coins â¢ owned " + owned
+            price.toString() + "  |  x" + owned
         }
-        canvas.drawText(
-            detail,
-            rect.centerX(),
-            rect.bottom - dp(25f),
-            secondaryTextPaint
-        )
+        accentTextPaint.textSize = dp(13f)
+        accentTextPaint.color = Color.rgb(138, 82, 44)
+        accentTextPaint.textAlign = Paint.Align.RIGHT
+        canvas.drawText(rightText, rect.right - dp(18f), rect.centerY() + dp(5f), accentTextPaint)
+
+        textPaint.textAlign = Paint.Align.CENTER
+        secondaryTextPaint.textAlign = Paint.Align.CENTER
+        accentTextPaint.textAlign = Paint.Align.CENTER
     }
 
     private fun drawHelpers(canvas: Canvas) {
-        textPaint.textSize = dp(29f)
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.textSize = dp(30f)
         textPaint.color = Color.WHITE
         canvas.drawText("HELPERS", width / 2f, dp(44f), textPaint)
 
-        secondaryTextPaint.textSize = dp(14f)
+        secondaryTextPaint.textSize = dp(12f)
+        secondaryTextPaint.color = Color.argb(190, 255, 255, 255)
         canvas.drawText(
-            "Use them during a level after buying them in the shop.",
+            "Pick a helper in-game, then tap a candy",
             width / 2f,
-            dp(76f),
+            dp(67f),
             secondaryTextPaint
         )
 
-        drawHelperInfo(canvas, dp(105f), "HAMMER", "Tap it, then tap one candy", "x" + helperCounts[0])
-        drawHelperInfo(canvas, dp(200f), "CROSS BLAST", "Tap it, then choose a candy", "x" + helperCounts[1])
-        drawHelperInfo(canvas, dp(295f), "MOVES", "Unlimited moves are always available", "â")
+        drawHelperInfo(canvas, dp(104f), "HAMMER", "Remove one candy", "x" + helperCounts[0], 0)
+        drawHelperInfo(canvas, dp(196f), "CROSS BLAST", "Clear a full row and column", "x" + helperCounts[1], 1)
+        drawHelperInfo(canvas, dp(288f), "MOVES", "Moves are always available", "INF", 2)
 
-        accentTextPaint.textSize = dp(14f)
-        canvas.drawText(
-            "Match 4 creates a rocket that targets a random candy.",
-            width / 2f,
-            height * 0.60f,
-            accentTextPaint
-        )
-        canvas.drawText(
-            "Match 5 creates a bomb. Swipe it in the direction you want.",
-            width / 2f,
-            height * 0.64f,
-            accentTextPaint
-        )
+        drawRulePill(canvas, height * 0.61f, "MATCH 4", "Rocket launches to a random candy")
+        drawRulePill(canvas, height * 0.69f, "MATCH 5", "Bomb follows the swipe direction")
 
-        cardPaint.color = Color.argb(70, 255, 255, 255)
+        cardPaint.color = Color.argb(55, 255, 246, 220)
         canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
         secondaryTextPaint.textSize = dp(13f)
-        canvas.drawText(
-            "BACK",
-            screenBackRect.centerX(),
-            screenBackRect.centerY() + dp(4f),
-            secondaryTextPaint
-        )
+        secondaryTextPaint.color = Color.WHITE
+        canvas.drawText("BACK", screenBackRect.centerX(), screenBackRect.centerY() + dp(4f), secondaryTextPaint)
     }
 
     private fun drawHelperInfo(
@@ -1202,70 +1360,80 @@ class GameView @JvmOverloads constructor(
         top: Float,
         title: String,
         subtitle: String,
-        count: String
+        count: String,
+        iconType: Int
     ) {
-        val rect = RectF(dp(24f), top, width - dp(24f), top + dp(76f))
-        cardPaint.color = Color.argb(62, 255, 255, 255)
-        canvas.drawRoundRect(rect, dp(18f), dp(18f), cardPaint)
+        val rect = RectF(dp(20f), top, width - dp(20f), top + dp(76f))
+        drawWarmPanel(canvas, rect, 238)
+        drawHelperIcon(canvas, rect.left + dp(32f), rect.centerY(), iconType, dp(15f))
 
-        textPaint.textSize = dp(17f)
-        textPaint.color = Color.WHITE
-        canvas.drawText(title, rect.left + dp(18f), rect.top + dp(29f), textPaint)
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.textSize = dp(16f)
+        textPaint.color = Color.rgb(67, 39, 79)
+        canvas.drawText(title, rect.left + dp(55f), rect.top + dp(29f), textPaint)
 
-        secondaryTextPaint.textSize = dp(12f)
-        canvas.drawText(subtitle, rect.left + dp(18f), rect.bottom - dp(17f), secondaryTextPaint)
+        secondaryTextPaint.textAlign = Paint.Align.LEFT
+        secondaryTextPaint.textSize = dp(11f)
+        secondaryTextPaint.color = Color.rgb(92, 75, 102)
+        canvas.drawText(subtitle, rect.left + dp(55f), rect.bottom - dp(17f), secondaryTextPaint)
 
-        accentTextPaint.textSize = dp(16f)
-        canvas.drawText(count, rect.right - dp(26f), rect.centerY() + dp(6f), accentTextPaint)
+        accentTextPaint.textAlign = Paint.Align.RIGHT
+        accentTextPaint.textSize = dp(15f)
+        accentTextPaint.color = Color.rgb(138, 82, 44)
+        canvas.drawText(count, rect.right - dp(18f), rect.centerY() + dp(5f), accentTextPaint)
+
+        textPaint.textAlign = Paint.Align.CENTER
+        secondaryTextPaint.textAlign = Paint.Align.CENTER
+        accentTextPaint.textAlign = Paint.Align.CENTER
+    }
+
+    private fun drawRulePill(canvas: Canvas, y: Float, title: String, detail: String) {
+        val rect = RectF(dp(26f), y - dp(19f), width - dp(26f), y + dp(19f))
+        cardPaint.color = Color.argb(38, 255, 246, 220)
+        canvas.drawRoundRect(rect, dp(19f), dp(19f), cardPaint)
+        accentTextPaint.textAlign = Paint.Align.LEFT
+        accentTextPaint.textSize = dp(11f)
+        accentTextPaint.color = Color.rgb(255, 223, 109)
+        canvas.drawText(title, rect.left + dp(13f), y + dp(4f), accentTextPaint)
+        secondaryTextPaint.textAlign = Paint.Align.LEFT
+        secondaryTextPaint.textSize = dp(10f)
+        secondaryTextPaint.color = Color.argb(205, 255, 255, 255)
+        canvas.drawText(detail, rect.left + dp(79f), y + dp(4f), secondaryTextPaint)
+        accentTextPaint.textAlign = Paint.Align.CENTER
+        secondaryTextPaint.textAlign = Paint.Align.CENTER
     }
 
     private fun drawHelperBar(canvas: Canvas) {
-        fun drawButton(rect: RectF, title: String, count: Int, selected: Boolean) {
-            cardPaint.color = if (selected) {
-                Color.argb(145, 255, 211, 79)
-            } else {
-                Color.argb(58, 255, 255, 255)
-            }
+        fun drawButton(rect: RectF, title: String, count: Int, selected: Boolean, iconType: Int) {
+            val base = if (selected) Color.rgb(255, 223, 109) else Color.argb(58, 255, 246, 220)
+            cardPaint.color = Color.argb(if (selected) 235 else 150, Color.red(base), Color.green(base), Color.blue(base))
             canvas.drawRoundRect(rect, dp(15f), dp(15f), cardPaint)
-
-            textPaint.textSize = dp(11f)
-            textPaint.color = if (selected) Color.rgb(35, 29, 36) else Color.WHITE
-            canvas.drawText(title, rect.centerX(), rect.top + dp(17f), textPaint)
-
-            secondaryTextPaint.textSize = dp(10f)
-            canvas.drawText(
-                if (title == "MOVES") "â" else "x" + count,
-                rect.centerX(),
-                rect.bottom - dp(9f),
-                secondaryTextPaint
-            )
+            drawHelperIcon(canvas, rect.left + dp(21f), rect.centerY(), iconType, dp(8f))
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.textSize = dp(10f)
+            textPaint.color = if (selected) Color.rgb(67, 39, 79) else Color.WHITE
+            canvas.drawText(title, rect.left + dp(34f), rect.top + dp(16f), textPaint)
+            secondaryTextPaint.textAlign = Paint.Align.LEFT
+            secondaryTextPaint.textSize = dp(9f)
+            secondaryTextPaint.color = if (selected) Color.rgb(92, 75, 102) else Color.argb(190, 255, 255, 255)
+            canvas.drawText(if (title == "MOVES") "INF" else "x" + count, rect.left + dp(34f), rect.bottom - dp(8f), secondaryTextPaint)
         }
 
-        drawButton(
-            helperHammerRect,
-            "HAMMER",
-            helperCounts[0],
-            activeHelper == ActiveHelper.HAMMER
-        )
-        drawButton(
-            helperCrossRect,
-            "CROSS",
-            helperCounts[1],
-            activeHelper == ActiveHelper.CROSS
-        )
-        drawButton(
-            helperMoveRect,
-            "MOVES",
-            Int.MAX_VALUE,
-            false
-        )
+        drawButton(helperHammerRect, "HAMMER", helperCounts[0], activeHelper == ActiveHelper.HAMMER, 0)
+        drawButton(helperCrossRect, "CROSS", helperCounts[1], activeHelper == ActiveHelper.CROSS, 1)
+        drawButton(helperMoveRect, "MOVES", Int.MAX_VALUE, false, 2)
+
+        textPaint.textAlign = Paint.Align.CENTER
+        secondaryTextPaint.textAlign = Paint.Align.CENTER
 
         if (activeHelper != ActiveHelper.NONE) {
             secondaryTextPaint.textSize = dp(10f)
+            secondaryTextPaint.color = Color.rgb(255, 223, 109)
             val label = if (activeHelper == ActiveHelper.HAMMER) {
-                "HAMMER ACTIVE â¢ TAP A CANDY"
+                "HAMMER ACTIVE - TAP A CANDY"
             } else {
-                "CROSS ACTIVE â¢ TAP A CANDY"
+                "CROSS ACTIVE - TAP A CANDY"
             }
             canvas.drawText(label, width / 2f, dp(168f), secondaryTextPaint)
         }
@@ -1276,6 +1444,8 @@ class GameView @JvmOverloads constructor(
         val firstVisible = firstMapLevel(maxVisibleLevel)
         val lastVisible = lastMapLevel(maxVisibleLevel)
 
+        drawMapBackdrop(canvas, levelScrollY)
+
         canvas.save()
         canvas.clipRect(0f, mapHeaderHeight(), width.toFloat(), height.toFloat())
         canvas.translate(0f, -levelScrollY.toFloat())
@@ -1285,10 +1455,11 @@ class GameView @JvmOverloads constructor(
                 val start = levelNodeCenter(level)
                 val end = levelNodeCenter(level + 1L)
                 levelRoutePaint.color = if (level < highestUnlockedLevel) {
-                    Color.argb(150, 255, 211, 79)
+                    Color.argb(175, 255, 223, 109)
                 } else {
-                    Color.argb(85, 255, 255, 255)
+                    Color.argb(68, 255, 255, 255)
                 }
+                levelRoutePaint.strokeWidth = dp(5f)
                 canvas.drawLine(start.first, start.second, end.first, end.second, levelRoutePaint)
             }
         }
@@ -1297,34 +1468,34 @@ class GameView @JvmOverloads constructor(
             val center = levelNodeCenter(level)
             val unlocked = level <= highestUnlockedLevel
             val current = level == currentLevel
-            val radius = if (current) dp(27f) else dp(23f)
+            val radius = if (current) dp(28f) else dp(24f)
+
+            cardPaint.color = Color.argb(70, 7, 9, 25)
+            canvas.drawCircle(center.first + dp(2f), center.second + dp(4f), radius, cardPaint)
 
             levelNodePaint.color = when {
-                current -> Color.rgb(255, 202, 64)
-                unlocked -> Color.rgb(74, 91, 150)
-                else -> Color.rgb(38, 44, 66)
+                current -> Color.rgb(255, 223, 109)
+                unlocked -> Color.rgb(235, 184, 205)
+                else -> Color.rgb(54, 58, 79)
             }
             canvas.drawCircle(center.first, center.second, radius, levelNodePaint)
 
             levelNodeBorderPaint.color = when {
                 current -> Color.WHITE
-                unlocked -> Color.argb(190, 255, 255, 255)
-                else -> Color.argb(75, 255, 255, 255)
+                unlocked -> Color.rgb(255, 246, 220)
+                else -> Color.argb(65, 255, 255, 255)
             }
+            levelNodeBorderPaint.strokeWidth = dp(2f)
             canvas.drawCircle(center.first, center.second, radius, levelNodeBorderPaint)
 
             textPaint.textSize = if (level >= 1000L) dp(11f) else dp(14f)
-            textPaint.color = if (unlocked || current) Color.WHITE else Color.argb(110, 255, 255, 255)
+            textPaint.color = if (unlocked || current) Color.rgb(67, 39, 79) else Color.argb(110, 255, 255, 255)
             canvas.drawText(level.toString(), center.first, center.second + dp(5f), textPaint)
 
             if (current) {
-                secondaryTextPaint.textSize = dp(11f)
-                canvas.drawText(
-                    "CURRENT",
-                    center.first,
-                    center.second + radius + dp(16f),
-                    secondaryTextPaint
-                )
+                secondaryTextPaint.textSize = dp(10f)
+                secondaryTextPaint.color = Color.WHITE
+                canvas.drawText("CURRENT", center.first, center.second + radius + dp(16f), secondaryTextPaint)
             }
         }
 
@@ -1332,35 +1503,96 @@ class GameView @JvmOverloads constructor(
         drawMapHeader(canvas, maxVisibleLevel)
     }
 
+    private fun drawMapBackdrop(canvas: Canvas, scrollY: Int) {
+        val horizon = mapHeaderHeight() + dp(12f) - scrollY
+        val hillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        hillPaint.color = Color.argb(32, 255, 246, 220)
+        canvas.drawCircle(width * 0.15f, horizon + dp(170f), dp(95f), hillPaint)
+        canvas.drawCircle(width * 0.84f, horizon + dp(240f), dp(120f), hillPaint)
+        hillPaint.color = Color.argb(20, 159, 224, 255)
+        canvas.drawCircle(width * 0.52f, horizon + dp(430f), dp(145f), hillPaint)
+
+        drawTinyStar(canvas, width * 0.15f, horizon + dp(125f), dp(4f))
+        drawTinyStar(canvas, width * 0.84f, horizon + dp(145f), dp(5f))
+        drawTinyStar(canvas, width * 0.30f, horizon + dp(345f), dp(3f))
+        drawTinyStar(canvas, width * 0.70f, horizon + dp(520f), dp(3.5f))
+    }
+
     private fun drawMapHeader(canvas: Canvas, maxVisibleLevel: Long) {
         val headerBottom = mapHeaderHeight()
-        canvas.drawRect(0f, 0f, width.toFloat(), headerBottom, mapHeaderPaint)
+        cardPaint.color = Color.argb(125, 15, 15, 35)
+        canvas.drawRect(0f, 0f, width.toFloat(), headerBottom, cardPaint)
 
         val backRect = RectF(dp(10f), dp(12f), dp(92f), dp(42f))
-        cardPaint.color = Color.argb(60, 255, 255, 255)
+        cardPaint.color = Color.argb(58, 255, 246, 220)
         canvas.drawRoundRect(backRect, dp(15f), dp(15f), cardPaint)
-        secondaryTextPaint.textSize = dp(13f)
+        secondaryTextPaint.textSize = dp(12f)
+        secondaryTextPaint.color = Color.WHITE
         canvas.drawText("BACK", backRect.centerX(), dp(32f), secondaryTextPaint)
 
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif-rounded", android.graphics.Typeface.BOLD)
         textPaint.textSize = dp(23f)
         textPaint.color = Color.WHITE
-        canvas.drawText("LEVEL MAP", width / 2f, dp(34f), textPaint)
+        canvas.drawText("LEVEL MAP", width / 2f, dp(33f), textPaint)
 
-        secondaryTextPaint.textSize = dp(12f)
-        canvas.drawText(
-            "Swipe up/down â¢ Tap an unlocked level",
-            width / 2f,
-            dp(55f),
-            secondaryTextPaint
-        )
+        secondaryTextPaint.textSize = dp(10f)
+        secondaryTextPaint.color = Color.argb(185, 255, 255, 255)
+        canvas.drawText("Swipe up/down - tap an unlocked level", width / 2f, dp(54f), secondaryTextPaint)
 
-        accentTextPaint.textSize = dp(14f)
-        canvas.drawText(
-            "UNLOCKED " + highestUnlockedLevel + "   â¢   VIEWING TO " + maxVisibleLevel,
-            width / 2f,
-            dp(77f),
-            accentTextPaint
+        accentTextPaint.textSize = dp(12f)
+        accentTextPaint.color = Color.rgb(255, 223, 109)
+        canvas.drawText("UNLOCKED " + highestUnlockedLevel + "  |  VIEWING TO " + maxVisibleLevel, width / 2f, dp(76f), accentTextPaint)
+    }
+
+    private fun drawWarmPanel(canvas: Canvas, rect: RectF, alpha: Int) {
+        cardPaint.color = Color.argb(80, 6, 9, 25)
+        canvas.drawRoundRect(
+            RectF(rect.left + dp(2f), rect.top + dp(5f), rect.right + dp(2f), rect.bottom + dp(5f)),
+            dp(20f),
+            dp(20f),
+            cardPaint
         )
+        cardPaint.color = Color.argb(alpha, 255, 246, 220)
+        canvas.drawRoundRect(rect, dp(20f), dp(20f), cardPaint)
+        boardBorderPaint.color = Color.argb(85, 255, 255, 255)
+        boardBorderPaint.strokeWidth = dp(1f)
+        canvas.drawRoundRect(rect, dp(20f), dp(20f), boardBorderPaint)
+    }
+
+    private fun drawHelperIcon(canvas: Canvas, cx: Float, cy: Float, type: Int, radius: Float) {
+        when (type) {
+            0 -> {
+                sparklePaint.color = Color.rgb(231, 108, 73)
+                canvas.drawRoundRect(cx - radius * 0.45f, cy - radius, cx + radius * 0.45f, cy + radius, radius * 0.22f, radius * 0.22f, sparklePaint)
+                canvas.drawCircle(cx + radius * 0.7f, cy - radius * 0.65f, radius * 0.28f, sparklePaint)
+            }
+            1 -> {
+                sparklePaint.color = Color.rgb(92, 157, 205)
+                canvas.drawRoundRect(cx - radius * 0.30f, cy - radius, cx + radius * 0.30f, cy + radius, radius * 0.18f, radius * 0.18f, sparklePaint)
+                canvas.drawRoundRect(cx - radius, cy - radius * 0.30f, cx + radius, cy + radius * 0.30f, radius * 0.18f, radius * 0.18f, sparklePaint)
+            }
+            else -> {
+                sparklePaint.color = Color.rgb(255, 195, 84)
+                canvas.drawCircle(cx, cy, radius, sparklePaint)
+                sparklePaint.color = Color.rgb(138, 82, 44)
+                canvas.drawCircle(cx, cy, radius * 0.48f, sparklePaint)
+            }
+        }
+    }
+
+    private fun drawTinyStar(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+        val path = Path().apply {
+            moveTo(cx, cy - radius)
+            lineTo(cx + radius * 0.28f, cy - radius * 0.28f)
+            lineTo(cx + radius, cy)
+            lineTo(cx + radius * 0.28f, cy + radius * 0.28f)
+            lineTo(cx, cy + radius)
+            lineTo(cx - radius * 0.28f, cy + radius * 0.28f)
+            lineTo(cx - radius, cy)
+            lineTo(cx - radius * 0.28f, cy - radius * 0.28f)
+            close()
+        }
+        canvas.drawPath(path, sparklePaint)
     }
 
     private fun mapHeaderHeight(): Float = dp(92f)
