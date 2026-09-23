@@ -24,6 +24,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.OverScroller
 import com.tomasthrawat.candycrush.model.GameBoard
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
@@ -37,10 +38,21 @@ class GameView @JvmOverloads constructor(
     attrs: android.util.AttributeSet? = null
 ) : View(context, attrs) {
 
+    private enum class Screen { MENU, GAME, SHOP, HELPERS }
+    private enum class ActiveHelper { NONE, HAMMER, CROSS }
+
     private val board = GameBoard(8, 8)
     private val sound = GameSoundManager(context.applicationContext)
     private val preferences = context.applicationContext
         .getSharedPreferences("candy_rush_progress", Context.MODE_PRIVATE)
+    private var screen = Screen.MENU
+    private var activeHelper = ActiveHelper.NONE
+    private var coins = preferences.getInt("coins", 250).coerceAtLeast(0)
+    private var helperCounts = intArrayOf(
+        preferences.getInt("helper_hammer", 3).coerceAtLeast(0),
+        preferences.getInt("helper_cross", 2).coerceAtLeast(0),
+        preferences.getInt("helper_moves", 2).coerceAtLeast(0)
+    )
     private val levelScroller = OverScroller(context)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val minimumFlingVelocity = ViewConfiguration.get(context).scaledMinimumFlingVelocity
@@ -124,6 +136,9 @@ class GameView @JvmOverloads constructor(
     private val mapHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(230, 16, 22, 41)
     }
+    private val menuGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(50, 255, 255, 255)
+    }
 
     // Palette follows the dominant colors present in the reference artwork.
     private val palette = intArrayOf(
@@ -142,6 +157,20 @@ class GameView @JvmOverloads constructor(
     private var gap = 0f
     private var headerHeight = 0f
     private var levelChipRect = RectF()
+    private var helperHammerRect = RectF()
+    private var helperCrossRect = RectF()
+    private var helperMoveRect = RectF()
+    private var menuPlayRect = RectF()
+    private var menuShopRect = RectF()
+    private var menuHelpersRect = RectF()
+    private var screenBackRect = RectF()
+    private var shopHammerRect = RectF()
+    private var shopCrossRect = RectF()
+    private var shopMovesRect = RectF()
+    private var rocketStartCell: Pair<Int, Int>? = null
+    private var rocketTargetCell: Pair<Int, Int>? = null
+    private var rocketProgress = 0f
+    private var rocketAnimator: ValueAnimator? = null
 
     private var selectedRow = -1
     private var selectedCol = -1
@@ -164,6 +193,8 @@ class GameView @JvmOverloads constructor(
     private var bombAnimator: ValueAnimator? = null
     private var bombCell: Pair<Int, Int>? = null
     private var bombProgress = 0f
+    private var bombDirectionRow = 0
+    private var bombDirectionCol = 0
     private var explosionCells: List<Pair<Int, Int>> = emptyList()
     private var explosionProgress = 0f
     private var earthquakeAnimator: ValueAnimator? = null
@@ -205,6 +236,14 @@ class GameView @JvmOverloads constructor(
     }
 
     fun startGame() {
+        screen = Screen.MENU
+        levelMapMode = false
+        cancelAnimations()
+        invalidate()
+    }
+
+    private fun openGame() {
+        screen = Screen.GAME
         startLevel(currentLevel)
     }
 
@@ -219,8 +258,18 @@ class GameView @JvmOverloads constructor(
         gameOver = false
         levelComplete = false
         levelMapMode = false
+        activeHelper = ActiveHelper.NONE
         levelScrollY = clampMapScroll(levelScrollY)
         invalidate()
+    }
+
+    private fun persistInventory() {
+        preferences.edit()
+            .putInt("coins", coins)
+            .putInt("helper_hammer", helperCounts[0])
+            .putInt("helper_cross", helperCounts[1])
+            .putInt("helper_moves", helperCounts[2])
+            .apply()
     }
 
     private fun persistProgress() {
@@ -243,7 +292,7 @@ class GameView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
 
-        headerHeight = dp(124f)
+        headerHeight = dp(170f)
 
         val horizontalPadding = dp(10f)
         val bottomPadding = dp(12f)
@@ -283,6 +332,33 @@ class GameView @JvmOverloads constructor(
             width / 2f + dp(86f),
             dp(84f)
         )
+
+        val helperGap = dp(6f)
+        val helperWidth = (width - dp(24f) - helperGap * 2f) / 3f
+        val helperTop = dp(123f)
+        val helperBottom = dp(160f)
+        helperHammerRect = RectF(dp(12f), helperTop, dp(12f) + helperWidth, helperBottom)
+        helperCrossRect = RectF(
+            helperHammerRect.right + helperGap,
+            helperTop,
+            helperHammerRect.right + helperGap + helperWidth,
+            helperBottom
+        )
+        helperMoveRect = RectF(
+            helperCrossRect.right + helperGap,
+            helperTop,
+            helperCrossRect.right + helperGap + helperWidth,
+            helperBottom
+        )
+
+        menuPlayRect = RectF(width * 0.14f, height * 0.34f, width * 0.86f, height * 0.44f)
+        menuShopRect = RectF(width * 0.14f, height * 0.47f, width * 0.86f, height * 0.57f)
+        menuHelpersRect = RectF(width * 0.14f, height * 0.60f, width * 0.86f, height * 0.70f)
+        screenBackRect = RectF(dp(12f), dp(14f), dp(104f), dp(52f))
+        shopHammerRect = RectF(width * 0.10f, height * 0.24f, width * 0.90f, height * 0.34f)
+        shopCrossRect = RectF(width * 0.10f, height * 0.37f, width * 0.90f, height * 0.47f)
+        shopMovesRect = RectF(width * 0.10f, height * 0.50f, width * 0.90f, height * 0.60f)
+
         levelScrollY = clampMapScroll(levelScrollY)
     }
 
@@ -305,6 +381,13 @@ class GameView @JvmOverloads constructor(
             backgroundPaint
         )
 
+        when (screen) {
+            Screen.MENU -> { drawMainMenu(canvas); return }
+            Screen.SHOP -> { drawShop(canvas); return }
+            Screen.HELPERS -> { drawHelpers(canvas); return }
+            Screen.GAME -> Unit
+        }
+
         if (levelMapMode) {
             drawLevelMap(canvas)
             return
@@ -320,11 +403,15 @@ class GameView @JvmOverloads constructor(
         }
 
         drawHeader(canvas)
+        drawHelperBar(canvas)
         drawBoardPanel(canvas)
 
         for (r in 0 until board.rows) {
             for (c in 0 until board.cols) {
-                if (isMovingCell(r, c) || isFallingDestination(r, c)) continue
+                if (isMovingCell(r, c) ||
+                    isFallingDestination(r, c) ||
+                    (rocketStartCell?.first == r && rocketStartCell?.second == c)
+                ) continue
 
                 val candy = board.get(r, c) ?: continue
                 val center = cellCenter(r, c)
@@ -357,6 +444,10 @@ class GameView @JvmOverloads constructor(
 
         if (fallingAnimator?.isRunning == true || fallingCandies.isNotEmpty()) {
             drawFallingCandies(canvas)
+        }
+
+        if (rocketAnimator?.isRunning == true) {
+            drawRocketFlight(canvas)
         }
 
         if (bombAnimator?.isRunning == true) {
@@ -467,13 +558,11 @@ class GameView @JvmOverloads constructor(
         canvas.translate(centerX, centerY)
         candyPaint.shader = null
 
-        if (type == Candy.BOMB_TYPE) {
-            drawBombCandy(canvas, half)
-            canvas.restore()
-            return
+        when (type) {
+            Candy.BOMB_TYPE -> drawBombCandy(canvas, half)
+            Candy.ROCKET_TYPE -> drawRocketCandy(canvas, half)
+            else -> drawReferenceCandy(canvas, type, half)
         }
-
-        drawReferenceCandy(canvas, type, half)
 
         if (selected) {
             canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
@@ -849,6 +938,223 @@ class GameView @JvmOverloads constructor(
         canvas.drawText(action, box.centerX(), box.centerY() + dp(18f), secondaryTextPaint)
     }
 
+    private fun drawMainMenu(canvas: Canvas) {
+        val cx = width / 2f
+
+        sparklePaint.color = Color.argb(42, 255, 255, 255)
+        canvas.drawCircle(cx, height * 0.22f, min(width, height) * 0.20f, sparklePaint)
+
+        textPaint.color = Color.WHITE
+        textPaint.textSize = dp(38f)
+        canvas.drawText("CANDY RUSH", cx, height * 0.17f, textPaint)
+
+        accentTextPaint.textSize = dp(15f)
+        canvas.drawText("COZY MATCH • ROCKETS • HELPERS", cx, height * 0.215f, accentTextPaint)
+
+        secondaryTextPaint.textSize = dp(14f)
+        canvas.drawText(
+            "LEVEL " + currentLevel + "   •   COINS " + coins,
+            cx,
+            height * 0.265f,
+            secondaryTextPaint
+        )
+
+        drawMenuButton(canvas, menuPlayRect, "PLAY")
+        drawMenuButton(canvas, menuShopRect, "SHOP")
+        drawMenuButton(canvas, menuHelpersRect, "HELPERS")
+
+        secondaryTextPaint.textSize = dp(12f)
+        canvas.drawText(
+            "Match 4 = rocket  •  Match 5 = directional bomb",
+            cx,
+            height * 0.76f,
+            secondaryTextPaint
+        )
+    }
+
+    private fun drawMenuButton(canvas: Canvas, rect: RectF, label: String) {
+        cardPaint.color = Color.argb(92, 255, 255, 255)
+        canvas.drawRoundRect(rect, dp(20f), dp(20f), cardPaint)
+        cardPaint.color = Color.argb(35, 255, 255, 255)
+        canvas.drawRoundRect(
+            RectF(
+                rect.left + dp(2f),
+                rect.top + dp(2f),
+                rect.right - dp(2f),
+                rect.bottom - dp(2f)
+            ),
+            dp(18f),
+            dp(18f),
+            cardPaint
+        )
+        textPaint.textSize = dp(20f)
+        textPaint.color = Color.WHITE
+        canvas.drawText(label, rect.centerX(), rect.centerY() + dp(7f), textPaint)
+    }
+
+    private fun drawShop(canvas: Canvas) {
+        textPaint.textSize = dp(29f)
+        textPaint.color = Color.WHITE
+        canvas.drawText("HELPER SHOP", width / 2f, dp(44f), textPaint)
+
+        accentTextPaint.textSize = dp(17f)
+        canvas.drawText("COINS  " + coins, width / 2f, dp(76f), accentTextPaint)
+
+        drawShopItem(canvas, shopHammerRect, "HAMMER", "Remove one candy", 40, helperCounts[0])
+        drawShopItem(canvas, shopCrossRect, "CROSS BLAST", "Clear row + column", 60, helperCounts[1])
+        drawShopItem(canvas, shopMovesRect, "+5 MOVES", "Add five moves", 80, helperCounts[2])
+
+        cardPaint.color = Color.argb(70, 255, 255, 255)
+        canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
+        secondaryTextPaint.textSize = dp(13f)
+        canvas.drawText(
+            "BACK",
+            screenBackRect.centerX(),
+            screenBackRect.centerY() + dp(4f),
+            secondaryTextPaint
+        )
+    }
+
+    private fun drawShopItem(
+        canvas: Canvas,
+        rect: RectF,
+        title: String,
+        subtitle: String,
+        price: Int,
+        owned: Int
+    ) {
+        cardPaint.color = Color.argb(78, 255, 255, 255)
+        canvas.drawRoundRect(rect, dp(18f), dp(18f), cardPaint)
+
+        textPaint.textSize = dp(18f)
+        textPaint.color = Color.WHITE
+        canvas.drawText(title, rect.centerX(), rect.top + dp(31f), textPaint)
+
+        secondaryTextPaint.textSize = dp(12f)
+        canvas.drawText(
+            subtitle + " • " + price + " coins • owned " + owned,
+            rect.centerX(),
+            rect.bottom - dp(25f),
+            secondaryTextPaint
+        )
+    }
+
+    private fun drawHelpers(canvas: Canvas) {
+        textPaint.textSize = dp(29f)
+        textPaint.color = Color.WHITE
+        canvas.drawText("HELPERS", width / 2f, dp(44f), textPaint)
+
+        secondaryTextPaint.textSize = dp(14f)
+        canvas.drawText(
+            "Use them during a level after buying them in the shop.",
+            width / 2f,
+            dp(76f),
+            secondaryTextPaint
+        )
+
+        drawHelperInfo(canvas, dp(105f), "HAMMER", "Tap it, then tap one candy", "x" + helperCounts[0])
+        drawHelperInfo(canvas, dp(200f), "CROSS BLAST", "Tap it, then choose a candy", "x" + helperCounts[1])
+        drawHelperInfo(canvas, dp(295f), "+5 MOVES", "Adds five moves immediately", "x" + helperCounts[2])
+
+        accentTextPaint.textSize = dp(14f)
+        canvas.drawText(
+            "Match 4 creates a rocket that targets a random candy.",
+            width / 2f,
+            height * 0.60f,
+            accentTextPaint
+        )
+        canvas.drawText(
+            "Match 5 creates a bomb. Swipe it in the direction you want.",
+            width / 2f,
+            height * 0.64f,
+            accentTextPaint
+        )
+
+        cardPaint.color = Color.argb(70, 255, 255, 255)
+        canvas.drawRoundRect(screenBackRect, dp(17f), dp(17f), cardPaint)
+        secondaryTextPaint.textSize = dp(13f)
+        canvas.drawText(
+            "BACK",
+            screenBackRect.centerX(),
+            screenBackRect.centerY() + dp(4f),
+            secondaryTextPaint
+        )
+    }
+
+    private fun drawHelperInfo(
+        canvas: Canvas,
+        top: Float,
+        title: String,
+        subtitle: String,
+        count: String
+    ) {
+        val rect = RectF(dp(24f), top, width - dp(24f), top + dp(76f))
+        cardPaint.color = Color.argb(62, 255, 255, 255)
+        canvas.drawRoundRect(rect, dp(18f), dp(18f), cardPaint)
+
+        textPaint.textSize = dp(17f)
+        textPaint.color = Color.WHITE
+        canvas.drawText(title, rect.left + dp(18f), rect.top + dp(29f), textPaint)
+
+        secondaryTextPaint.textSize = dp(12f)
+        canvas.drawText(subtitle, rect.left + dp(18f), rect.bottom - dp(17f), secondaryTextPaint)
+
+        accentTextPaint.textSize = dp(16f)
+        canvas.drawText(count, rect.right - dp(26f), rect.centerY() + dp(6f), accentTextPaint)
+    }
+
+    private fun drawHelperBar(canvas: Canvas) {
+        fun drawButton(rect: RectF, title: String, count: Int, selected: Boolean) {
+            cardPaint.color = if (selected) {
+                Color.argb(145, 255, 211, 79)
+            } else {
+                Color.argb(58, 255, 255, 255)
+            }
+            canvas.drawRoundRect(rect, dp(15f), dp(15f), cardPaint)
+
+            textPaint.textSize = dp(11f)
+            textPaint.color = if (selected) Color.rgb(35, 29, 36) else Color.WHITE
+            canvas.drawText(title, rect.centerX(), rect.top + dp(17f), textPaint)
+
+            secondaryTextPaint.textSize = dp(10f)
+            canvas.drawText(
+                "x" + count,
+                rect.centerX(),
+                rect.bottom - dp(9f),
+                secondaryTextPaint
+            )
+        }
+
+        drawButton(
+            helperHammerRect,
+            "HAMMER",
+            helperCounts[0],
+            activeHelper == ActiveHelper.HAMMER
+        )
+        drawButton(
+            helperCrossRect,
+            "CROSS",
+            helperCounts[1],
+            activeHelper == ActiveHelper.CROSS
+        )
+        drawButton(
+            helperMoveRect,
+            "+5 MOVES",
+            helperCounts[2],
+            false
+        )
+
+        if (activeHelper != ActiveHelper.NONE) {
+            secondaryTextPaint.textSize = dp(10f)
+            val label = if (activeHelper == ActiveHelper.HAMMER) {
+                "HAMMER ACTIVE • TAP A CANDY"
+            } else {
+                "CROSS ACTIVE • TAP A CANDY"
+            }
+            canvas.drawText(label, width / 2f, dp(168f), secondaryTextPaint)
+        }
+    }
+
     private fun drawLevelMap(canvas: Canvas) {
         val maxVisibleLevel = highestUnlockedLevel + 6L
         val firstVisible = firstMapLevel(maxVisibleLevel)
@@ -1134,11 +1440,31 @@ class GameView @JvmOverloads constructor(
         return row to col
     }
 
-    private fun beginSwap(r1: Int, c1: Int, r2: Int, c2: Int) {
-        if (swapAnimator?.isRunning == true) return
+    private fun beginSwap(
+        r1: Int,
+        c1: Int,
+        r2: Int,
+        c2: Int,
+        directionRow: Int = r2 - r1,
+        directionCol: Int = c2 - c1
+    ) {
+        if (swapAnimator?.isRunning == true ||
+            rocketAnimator?.isRunning == true ||
+            bombAnimator?.isRunning == true
+        ) return
 
         val first = board.get(r1, c1) ?: return
         val second = board.get(r2, c2) ?: return
+
+        if (first.type == Candy.BOMB_TYPE) {
+            activateDirectionalBomb(r1, c1, directionRow, directionCol)
+            return
+        }
+
+        if (first.type == Candy.ROCKET_TYPE) {
+            startRocketLaunch(r1 to c1)
+            return
+        }
 
         movingFromRow = r1
         movingFromCol = c1
@@ -1150,11 +1476,19 @@ class GameView @JvmOverloads constructor(
 
         selectedRow = -1
         selectedCol = -1
-        sound.playSwap()
+
+        val success = board.swap(r1, c1, r2, c2)
+        sound.playSwap(if (success) 1f else 0.78f)
+
+        if (!success) {
+            clearMovingState()
+            invalidate()
+            return
+        }
 
         swapAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 185L
-            interpolator = DecelerateInterpolator(1.4f)
+            duration = 72L
+            interpolator = DecelerateInterpolator(1.5f)
 
             addUpdateListener {
                 swapProgress = it.animatedValue as Float
@@ -1163,33 +1497,16 @@ class GameView @JvmOverloads constructor(
 
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    val success = board.swap(r1, c1, r2, c2)
-                    if (success) {
-                        startResolutionAnimation()
-                    } else {
-                        startReverseSwap()
-                    }
-                }
-            })
-            start()
-        }
-    }
-
-    private fun startReverseSwap() {
-        swapAnimator?.cancel()
-        swapAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = 125L
-            interpolator = DecelerateInterpolator()
-            addUpdateListener {
-                swapProgress = it.animatedValue as Float
-                invalidate()
-            }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    swapProgress = 0f
+                    swapAnimator = null
+                    swapProgress = 1f
                     clearMovingState()
-                    sound.playSwap(0.78f)
-                    invalidate()
+                    startResolutionAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    swapAnimator = null
+                    clearMovingState()
+                    swapProgress = 0f
                 }
             })
             start()
@@ -1197,7 +1514,7 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun startResolutionAnimation() {
-        if (fallingAnimator?.isRunning == true) return
+        if (rocketAnimator?.isRunning == true || bombAnimator?.isRunning == true) return
 
         val step = board.resolveNextStep()
         if (step == null) {
@@ -1207,24 +1524,25 @@ class GameView @JvmOverloads constructor(
             return
         }
 
-        if (step.bombCell != null) {
-            startBombCharge(step.bombCell)
-            return
-        }
-
         sound.playMatch()
+        coins += max(1, step.matchedCount / 3)
+        persistInventory()
+
         fallingCandies = step.fallingCandies
         fallingProgress = 0f
 
         if (fallingCandies.isEmpty()) {
-            post { continueResolutionAnimation() }
-            return
+            continueResolutionAnimation()
+        } else {
+            startFallingAnimation(220L)
         }
+    }
 
+    private fun startFallingAnimation(durationMs: Long) {
         fallingAnimator?.cancel()
         fallingAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 560L
-            interpolator = DecelerateInterpolator(1.7f)
+            duration = durationMs
+            interpolator = DecelerateInterpolator(1.45f)
 
             addUpdateListener {
                 fallingProgress = it.animatedValue as Float
@@ -1250,178 +1568,179 @@ class GameView @JvmOverloads constructor(
         }
     }
 
-    private fun startBombCharge(cell: Pair<Int, Int>) {
-        bombAnimator?.cancel()
-        bombCell = cell
-        bombProgress = 0f
-        explosionCells = emptyList()
-        explosionProgress = 0f
+    private fun activateDirectionalBomb(
+        row: Int,
+        col: Int,
+        directionRow: Int,
+        directionCol: Int
+    ) {
+        if (bombAnimator?.isRunning == true || rocketAnimator?.isRunning == true) return
 
-        bombAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 3000L
-            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        val horizontal = abs(directionCol) >= abs(directionRow)
+        val dr = if (horizontal) 0 else if (directionRow < 0) -1 else 1
+        val dc = if (horizontal) {
+            if (directionCol < 0) -1 else 1
+        } else {
+            0
+        }
+
+        val detonation = board.detonateBomb(row, col, dr, dc) ?: return
+
+        bombCell = row to col
+        bombDirectionRow = dr
+        bombDirectionCol = dc
+        bombProgress = 1f
+        explosionCells = detonation.explosionCells
+        explosionProgress = 1f
+        fallingCandies = detonation.fallingCandies
+        fallingProgress = 0f
+        selectedRow = -1
+        selectedCol = -1
+        sound.playMatch()
+
+        bombAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 220L
+            interpolator = DecelerateInterpolator(1.2f)
 
             addUpdateListener {
-                bombProgress = it.animatedValue as Float
+                val value = it.animatedValue as Float
+                bombProgress = value
+                explosionProgress = value
                 invalidate()
             }
 
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     bombAnimator = null
-                    val target = bombCell
-                    if (target == null) {
-                        finishBombSequence()
-                        return
-                    }
-
-                    val detonation = board.detonateBomb(target.first, target.second)
                     bombCell = null
+                    bombProgress = 0f
+                    explosionProgress = 0f
+                    explosionCells = emptyList()
 
-                    if (detonation == null) {
-                        finishBombSequence()
-                        return
+                    if (fallingCandies.isNotEmpty()) {
+                        startFallingAnimation(180L)
+                    } else {
+                        continueResolutionAnimation()
                     }
-
-                    explosionCells = detonation.explosionCells
-                    explosionProgress = 1f
-                    fallingCandies = detonation.fallingCandies
-                    fallingProgress = 0f
-                    sound.playMatch()
-                    startBombExplosionAnimation()
                 }
 
                 override fun onAnimationCancel(animation: Animator) {
                     bombAnimator = null
                     bombCell = null
                     bombProgress = 0f
+                    explosionProgress = 0f
+                    explosionCells = emptyList()
+                    fallingCandies = emptyList()
                 }
             })
             start()
         }
     }
 
-    private fun startBombExplosionAnimation() {
-        fallingAnimator?.cancel()
-        fallingAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 560L
-            interpolator = DecelerateInterpolator(1.7f)
+    private fun startRocketLaunch(cell: Pair<Int, Int>) {
+        if (rocketAnimator?.isRunning == true || bombAnimator?.isRunning == true) return
+
+        val target = board.prepareRocketLaunch(cell.first, cell.second) ?: return
+        rocketStartCell = cell
+        rocketTargetCell = target
+        rocketProgress = 0f
+        selectedRow = -1
+        selectedCol = -1
+        sound.playMatch()
+
+        rocketAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 250L
+            interpolator = DecelerateInterpolator(1.25f)
 
             addUpdateListener {
-                fallingProgress = it.animatedValue as Float
-                explosionProgress = (1f - fallingProgress).coerceIn(0f, 1f)
+                rocketProgress = it.animatedValue as Float
                 invalidate()
             }
 
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    fallingProgress = 1f
-                    fallingAnimator = null
-                    explosionProgress = 0f
-                    explosionCells = emptyList()
-                    fallingCandies = emptyList()
-                    invalidate()
-                    startEarthquakeAnimation()
-                }
+                    rocketAnimator = null
 
-                override fun onAnimationCancel(animation: Animator) {
-                    fallingAnimator = null
-                    explosionProgress = 0f
-                    explosionCells = emptyList()
-                    fallingCandies = emptyList()
+                    val startCell = rocketStartCell
+                    val targetCell = rocketTargetCell
+                    rocketStartCell = null
+                    rocketTargetCell = null
+                    rocketProgress = 0f
+
+                    if (startCell == null || targetCell == null) {
+                        continueResolutionAnimation()
+                        return
+                    }
+
+                    val launch = board.finishRocketLaunch(
+                        startCell.first,
+                        startCell.second,
+                        targetCell.first,
+                        targetCell.second
+                    )
+
+                    if (launch == null) {
+                        continueResolutionAnimation()
+                        return
+                    }
+
+                    coins += 2
+                    persistInventory()
+                    fallingCandies = launch.fallingCandies
                     fallingProgress = 0f
-                }
-            })
-            start()
-        }
-    }
 
-    private fun startEarthquakeAnimation() {
-        earthquakeAnimator?.cancel()
-        earthquakeProgress = 0f
-
-        earthquakeAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 720L
-            interpolator = android.view.animation.DecelerateInterpolator(1.2f)
-
-            addUpdateListener {
-                earthquakeProgress = it.animatedValue as Float
-                invalidate()
-            }
-
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    earthquakeAnimator = null
-                    earthquakeProgress = 0f
-                    invalidate()
-                    continueResolutionAnimation()
+                    if (fallingCandies.isNotEmpty()) {
+                        startFallingAnimation(180L)
+                    } else {
+                        continueResolutionAnimation()
+                    }
                 }
 
                 override fun onAnimationCancel(animation: Animator) {
-                    earthquakeAnimator = null
-                    earthquakeProgress = 0f
+                    rocketAnimator = null
+                    rocketStartCell = null
+                    rocketTargetCell = null
+                    rocketProgress = 0f
                 }
             })
             start()
         }
-    }
-
-    private fun finishBombSequence() {
-        bombAnimator = null
-        bombCell = null
-        bombProgress = 0f
-        explosionCells = emptyList()
-        explosionProgress = 0f
-        fallingCandies = emptyList()
-        fallingProgress = 0f
-        continueResolutionAnimation()
     }
 
     private fun drawBombCharge(canvas: Canvas) {
         val cell = bombCell ?: return
         val center = cellCenter(cell.first, cell.second)
-        val pulse = 1f +
-            bombProgress * 0.18f +
-            sin(bombProgress * Math.PI * 6.0).toFloat() * 0.04f
-        val radius = cellSize * 0.56f * pulse
-
+        val pulse = 1f + bombProgress * 0.18f
         candyEdgePaint.color = Color.argb(
-            ((1f - bombProgress) * 220f).toInt().coerceIn(0, 220),
-            255,
-            180,
-            40
+            (bombProgress * 230f).toInt().coerceIn(0, 230),
+            255, 184, 46
         )
         candyEdgePaint.strokeWidth = dp(3f)
-        canvas.drawCircle(center.first, center.second, radius, candyEdgePaint)
-
-        sparklePaint.color = Color.rgb(255, 228, 120)
-        sparklePaint.alpha = ((1f - bombProgress) * 220f).toInt().coerceIn(0, 220)
-        canvas.drawCircle(center.first, center.second, cellSize * 0.1f, sparklePaint)
-        sparklePaint.alpha = 255
+        canvas.drawCircle(center.first, center.second, cellSize * 0.54f * pulse, candyEdgePaint)
     }
 
     private fun drawBombExplosion(canvas: Canvas) {
-        val progress = explosionProgress
+        val progress = explosionProgress.coerceIn(0f, 1f)
+        if (explosionCells.isEmpty()) return
 
         for ((row, col) in explosionCells) {
             val center = cellCenter(row, col)
-            val radius = cellSize * (0.25f + (1f - progress) * 0.78f)
-            val alpha = (progress * 230f).toInt().coerceIn(0, 230)
+            val radius = cellSize * (0.15f + 0.38f * progress)
+            val alpha = (progress * 235f).toInt().coerceIn(0, 235)
 
-            candyEdgePaint.color = Color.argb(alpha, 255, 174, 38)
-            candyEdgePaint.strokeWidth = dp(3f)
+            candyEdgePaint.color = Color.argb(alpha, 255, 177, 38)
+            candyEdgePaint.strokeWidth = dp(4f)
             canvas.drawCircle(center.first, center.second, radius, candyEdgePaint)
 
-            sparklePaint.color = Color.rgb(255, 228, 130)
+            sparklePaint.color = Color.rgb(255, 232, 140)
             sparklePaint.alpha = alpha
             canvas.drawCircle(
                 center.first,
                 center.second,
-                cellSize * 0.16f * progress,
+                cellSize * 0.15f * progress,
                 sparklePaint
             )
         }
-
         sparklePaint.alpha = 255
     }
 
@@ -1432,6 +1751,100 @@ class GameView @JvmOverloads constructor(
         } else {
             startSuccessPulse()
         }
+    }
+
+    private fun drawRocketCandy(canvas: Canvas, half: Float) {
+        val body = Path().apply {
+            moveTo(0f, -half * 0.98f)
+            cubicTo(
+                half * 0.55f, -half * 0.55f,
+                half * 0.55f, half * 0.25f,
+                0f, half * 0.74f
+            )
+            cubicTo(
+                -half * 0.55f, half * 0.25f,
+                -half * 0.55f, -half * 0.55f,
+                0f, -half * 0.98f
+            )
+            close()
+        }
+
+        candyPaint.shader = LinearGradient(
+            -half * 0.35f,
+            -half,
+            half * 0.25f,
+            half,
+            Color.WHITE,
+            Color.rgb(255, 173, 58),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawPath(body, candyPaint)
+        candyPaint.shader = null
+
+        candyEdgePaint.color = Color.argb(190, 255, 255, 255)
+        candyEdgePaint.strokeWidth = dp(1.5f)
+        canvas.drawPath(body, candyEdgePaint)
+
+        sparklePaint.color = Color.rgb(255, 222, 109)
+        canvas.drawCircle(0f, -half * 0.22f, half * 0.16f, sparklePaint)
+
+        val finLeft = Path().apply {
+            moveTo(-half * 0.30f, half * 0.30f)
+            lineTo(-half * 0.82f, half * 0.74f)
+            lineTo(-half * 0.18f, half * 0.62f)
+            close()
+        }
+        canvas.drawPath(finLeft, sparklePaint)
+
+        val finRight = Path().apply {
+            moveTo(half * 0.30f, half * 0.30f)
+            lineTo(half * 0.82f, half * 0.74f)
+            lineTo(half * 0.18f, half * 0.62f)
+            close()
+        }
+        canvas.drawPath(finRight, sparklePaint)
+    }
+
+    private fun drawRocketFlight(canvas: Canvas) {
+        val start = rocketStartCell ?: return
+        val target = rocketTargetCell ?: return
+        val a = cellCenter(start.first, start.second)
+        val b = cellCenter(target.first, target.second)
+        val p = easeOut(rocketProgress)
+        val x = lerp(a.first, b.first, p)
+        val y = lerp(a.second, b.second, p)
+
+        val angle = Math.toDegrees(
+            atan2(
+                (b.second - a.second).toDouble(),
+                (b.first - a.first).toDouble()
+            )
+        ).toFloat() + 90f
+
+        candyEdgePaint.color = Color.argb(135, 255, 205, 73)
+        candyEdgePaint.strokeWidth = dp(3f)
+        canvas.drawLine(
+            x,
+            y,
+            lerp(a.first, x, 0.72f),
+            lerp(a.second, y, 0.72f),
+            candyEdgePaint
+        )
+
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(angle)
+        drawRocketCandy(canvas, cellSize * 0.42f)
+        canvas.restore()
+
+        candyEdgePaint.color = Color.argb(140, 255, 210, 90)
+        candyEdgePaint.strokeWidth = dp(2f)
+        canvas.drawCircle(
+            b.first,
+            b.second,
+            cellSize * (0.30f + 0.10f * (1f - rocketProgress)),
+            candyEdgePaint
+        )
     }
 
     private fun drawFallingCandies(canvas: Canvas) {
@@ -1467,7 +1880,7 @@ class GameView @JvmOverloads constructor(
     private fun startSuccessPulse() {
         successAnimator?.cancel()
         successAnimator = ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = 220L
+            duration = 120L
             addUpdateListener {
                 successPulse = it.animatedValue as Float
                 invalidate()
@@ -1493,6 +1906,13 @@ class GameView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (screen) {
+            Screen.MENU -> return onMenuTouch(event)
+            Screen.SHOP -> return onShopTouch(event)
+            Screen.HELPERS -> return onHelpersTouch(event)
+            Screen.GAME -> Unit
+        }
+
         if (levelMapMode) return onMapTouch(event)
         if (levelTransitionRunning) return true
 
@@ -1501,7 +1921,6 @@ class GameView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(true)
                 gestureStartX = event.x
                 gestureStartY = event.y
-
                 val startCell = cellFromPoint(event.x, event.y)
                 gestureStartRow = startCell?.first ?: -1
                 gestureStartCol = startCell?.second ?: -1
@@ -1515,64 +1934,104 @@ class GameView @JvmOverloads constructor(
                 val dy = event.y - gestureStartY
                 val startRow = gestureStartRow
                 val startCol = gestureStartCol
+                val isTap = max(abs(dx), abs(dy)) < dp(18f)
 
                 parent?.requestDisallowInterceptTouchEvent(false)
                 gestureStartRow = -1
                 gestureStartCol = -1
 
+                if (helperHammerRect.contains(event.x, event.y) && isTap) {
+                    activateOrToggleHelper(ActiveHelper.HAMMER)
+                    return true
+                }
+                if (helperCrossRect.contains(event.x, event.y) && isTap) {
+                    activateOrToggleHelper(ActiveHelper.CROSS)
+                    return true
+                }
+                if (helperMoveRect.contains(event.x, event.y) && isTap) {
+                    useExtraMoveHelper()
+                    return true
+                }
+
                 if (swapAnimator?.isRunning == true ||
                     successAnimator?.isRunning == true ||
                     fallingAnimator?.isRunning == true ||
                     bombAnimator?.isRunning == true ||
+                    rocketAnimator?.isRunning == true ||
                     earthquakeAnimator?.isRunning == true
-                ) {
-                    return true
-                }
+                ) return true
 
-                if (startRow in 0 until board.rows && startCol in 0 until board.cols) {
-                    val threshold = max(dp(18f), min(cellSize * 0.30f, dp(32f)))
-                    val horizontal = abs(dx) >= abs(dy)
-
-                    if (max(abs(dx), abs(dy)) >= threshold) {
-                        val targetRow = when {
-                            !horizontal && dy < 0f -> startRow - 1
-                            !horizontal -> startRow + 1
-                            else -> startRow
-                        }
-                        val targetCol = when {
-                            horizontal && dx > 0f -> startCol + 1
-                            horizontal -> startCol - 1
-                            else -> startCol
-                        }
-
-                        if (targetRow in 0 until board.rows &&
-                            targetCol in 0 until board.cols
-                        ) {
-                            beginSwap(startRow, startCol, targetRow, targetCol)
-                            invalidate()
-                        }
-                        return true
-                    }
-                }
-
-                if (levelChipRect.contains(event.x, event.y)) {
+                if (levelChipRect.contains(event.x, event.y) && isTap) {
                     openLevelMap()
                     return true
                 }
 
-                if (gameOver) {
+                if (gameOver && isTap) {
                     startLevel(currentLevel)
                     return true
                 }
 
-                if (levelComplete) {
+                if (levelComplete && isTap) {
                     navigateLevelBySwipe(1)
                     return true
                 }
 
+                if (startRow in 0 until board.rows && startCol in 0 until board.cols) {
+                    val threshold = max(dp(12f), min(cellSize * 0.24f, dp(28f)))
+
+                    if (max(abs(dx), abs(dy)) >= threshold) {
+                        val horizontal = abs(dx) >= abs(dy)
+                        val directionRow = when {
+                            !horizontal && dy < 0f -> -1
+                            !horizontal -> 1
+                            else -> 0
+                        }
+                        val directionCol = when {
+                            horizontal && dx > 0f -> 1
+                            horizontal -> -1
+                            else -> 0
+                        }
+                        val targetRow = startRow + directionRow
+                        val targetCol = startCol + directionCol
+
+                        when (board.get(startRow, startCol)?.type) {
+                            Candy.BOMB_TYPE -> activateDirectionalBomb(
+                                startRow,
+                                startCol,
+                                directionRow,
+                                directionCol
+                            )
+                            Candy.ROCKET_TYPE -> startRocketLaunch(startRow to startCol)
+                            else -> {
+                                if (targetRow in 0 until board.rows &&
+                                    targetCol in 0 until board.cols
+                                ) {
+                                    beginSwap(
+                                        startRow,
+                                        startCol,
+                                        targetRow,
+                                        targetCol,
+                                        directionRow,
+                                        directionCol
+                                    )
+                                }
+                            }
+                        }
+                        invalidate()
+                        return true
+                    }
+                }
+
+                if (!isTap) return true
+
                 val cell = cellFromPoint(event.x, event.y) ?: return true
                 val row = cell.first
                 val col = cell.second
+
+                if (activeHelper != ActiveHelper.NONE) {
+                    useActiveHelper(row, col)
+                    return true
+                }
 
                 if (selectedRow == -1) {
                     selectedRow = row
@@ -1585,7 +2044,14 @@ class GameView @JvmOverloads constructor(
                         selectedRow = -1
                         selectedCol = -1
                     } else if (abs(fromRow - row) + abs(fromCol - col) == 1) {
-                        beginSwap(fromRow, fromCol, row, col)
+                        beginSwap(
+                            fromRow,
+                            fromCol,
+                            row,
+                            col,
+                            row - fromRow,
+                            col - fromCol
+                        )
                     } else {
                         selectedRow = row
                         selectedCol = col
@@ -1605,6 +2071,103 @@ class GameView @JvmOverloads constructor(
 
             else -> return true
         }
+    }
+
+    private fun activateOrToggleHelper(helper: ActiveHelper) {
+        if (helper == ActiveHelper.HAMMER && helperCounts[0] <= 0) return
+        if (helper == ActiveHelper.CROSS && helperCounts[1] <= 0) return
+        activeHelper = if (activeHelper == helper) ActiveHelper.NONE else helper
+        invalidate()
+    }
+
+    private fun useExtraMoveHelper() {
+        if (helperCounts[2] <= 0) return
+        helperCounts[2]--
+        board.addMoves(5)
+        persistInventory()
+        activeHelper = ActiveHelper.NONE
+        invalidate()
+    }
+
+    private fun useActiveHelper(row: Int, col: Int) {
+        val falling = when (activeHelper) {
+            ActiveHelper.HAMMER -> {
+                if (helperCounts[0] <= 0) return
+                helperCounts[0]--
+                board.removeCell(row, col)
+            }
+            ActiveHelper.CROSS -> {
+                if (helperCounts[1] <= 0) return
+                helperCounts[1]--
+                board.clearCross(row, col)
+            }
+            ActiveHelper.NONE -> return
+        }
+
+        persistInventory()
+        activeHelper = ActiveHelper.NONE
+        fallingCandies = falling
+        fallingProgress = 0f
+        sound.playMatch()
+
+        if (fallingCandies.isNotEmpty()) {
+            startFallingAnimation(180L)
+        } else {
+            continueResolutionAnimation()
+        }
+        invalidate()
+    }
+
+    private fun onMenuTouch(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_UP) return true
+
+        when {
+            menuPlayRect.contains(event.x, event.y) -> openGame()
+            menuShopRect.contains(event.x, event.y) -> {
+                screen = Screen.SHOP
+                invalidate()
+            }
+            menuHelpersRect.contains(event.x, event.y) -> {
+                screen = Screen.HELPERS
+                invalidate()
+            }
+        }
+        return true
+    }
+
+    private fun onShopTouch(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_UP) return true
+
+        if (screenBackRect.contains(event.x, event.y)) {
+            screen = Screen.MENU
+            invalidate()
+            return true
+        }
+
+        when {
+            shopHammerRect.contains(event.x, event.y) -> buyHelper(0, 40)
+            shopCrossRect.contains(event.x, event.y) -> buyHelper(1, 60)
+            shopMovesRect.contains(event.x, event.y) -> buyHelper(2, 80)
+        }
+        return true
+    }
+
+    private fun buyHelper(index: Int, price: Int) {
+        if (coins < price) return
+        coins -= price
+        helperCounts[index]++
+        persistInventory()
+        invalidate()
+    }
+
+    private fun onHelpersTouch(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_UP) return true
+
+        if (screenBackRect.contains(event.x, event.y)) {
+            screen = Screen.MENU
+            invalidate()
+        }
+        return true
     }
 
     private fun navigateLevelBySwipe(direction: Int) {
@@ -1635,14 +2198,14 @@ class GameView @JvmOverloads constructor(
 
         animate()
             .translationY(exitDistance)
-            .setDuration(180L)
+            .setDuration(95L)
             .setInterpolator(DecelerateInterpolator(1.35f))
             .withEndAction {
                 startLevel(targetLevel)
                 translationY = -exitDistance
                 animate()
                     .translationY(0f)
-                    .setDuration(220L)
+                    .setDuration(120L)
                     .setInterpolator(DecelerateInterpolator(1.25f))
                     .withEndAction {
                         levelTransitionRunning = false
@@ -1670,18 +2233,29 @@ class GameView @JvmOverloads constructor(
         successAnimator?.cancel()
         fallingAnimator?.cancel()
         bombAnimator?.cancel()
+        rocketAnimator?.cancel()
         earthquakeAnimator?.cancel()
+
         swapAnimator = null
         successAnimator = null
         fallingAnimator = null
         bombAnimator = null
+        rocketAnimator = null
         earthquakeAnimator = null
+
         fallingCandies = emptyList()
         fallingProgress = 0f
         bombCell = null
         bombProgress = 0f
+        bombDirectionRow = 0
+        bombDirectionCol = 0
         explosionCells = emptyList()
         explosionProgress = 0f
+
+        rocketStartCell = null
+        rocketTargetCell = null
+        rocketProgress = 0f
+
         earthquakeProgress = 0f
         successPulse = 0f
         swapProgress = 0f

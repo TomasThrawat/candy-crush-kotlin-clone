@@ -6,18 +6,29 @@ data class FallingCandy(
     val type: Int,
     val column: Int,
     val startRow: Float,
-    val endRow: Float
+    val endRow: Float,
+    val specialDirection: Int = 0
 )
 
 data class ResolveStep(
     val matchedCount: Int,
     val fallingCandies: List<FallingCandy>,
-    val bombCell: Pair<Int, Int>? = null
+    val specialCell: Pair<Int, Int>? = null,
+    val specialType: Int = -1,
+    val specialDirection: Int = 0
 )
 
 data class BombDetonation(
     val explosionCells: List<Pair<Int, Int>>,
-    val fallingCandies: List<FallingCandy>
+    val fallingCandies: List<FallingCandy>,
+    val affectedCount: Int
+)
+
+data class RocketLaunch(
+    val startCell: Pair<Int, Int>,
+    val targetCell: Pair<Int, Int>,
+    val fallingCandies: List<FallingCandy>,
+    val affectedCount: Int
 )
 
 class GameBoard(val rows: Int = 8, val cols: Int = 8) {
@@ -30,7 +41,9 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         private set
 
     private var pendingMatches: Set<Pair<Int, Int>> = emptySet()
-    private var pendingBombCell: Pair<Int, Int>? = null
+    private var pendingSpecialCell: Pair<Int, Int>? = null
+    private var pendingSpecialType: Int = -1
+    private var pendingSpecialDirection: Int = 0
 
     init {
         reset()
@@ -40,7 +53,9 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         score = 0
         movesLeft = moves.coerceAtLeast(1)
         pendingMatches = emptySet()
-        pendingBombCell = null
+        pendingSpecialCell = null
+        pendingSpecialType = -1
+        pendingSpecialDirection = 0
         refill()
     }
 
@@ -64,13 +79,13 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     fun swap(r1: Int, c1: Int, r2: Int, c2: Int): Boolean {
         if (!isAdjacent(r1, c1, r2, c2)) return false
-        if (pendingMatches.isNotEmpty() || pendingBombCell != null) return false
+        if (pendingMatches.isNotEmpty()) return false
 
         val a = board[r1][c1] ?: return false
         val b = board[r2][c2] ?: return false
 
-        board[r1][c1] = Candy(b.type, r1, c1)
-        board[r2][c2] = Candy(a.type, r2, c2)
+        board[r1][c1] = Candy(b.type, r1, c1, b.specialDirection)
+        board[r2][c2] = Candy(a.type, r2, c2, a.specialDirection)
 
         val matches = findMatches()
         if (matches.isEmpty()) {
@@ -81,11 +96,11 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
         movesLeft--
         pendingMatches = matches
-        pendingBombCell = if (matches.size >= 5) {
-            chooseBombCell(matches, r2, c2)
-        } else {
-            null
-        }
+
+        val special = chooseSpecial(matches, r2, c2)
+        pendingSpecialCell = special?.first
+        pendingSpecialType = special?.second ?: -1
+        pendingSpecialDirection = special?.third ?: 0
         return true
     }
 
@@ -96,11 +111,10 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         if (matches.isEmpty()) return false
 
         pendingMatches = matches
-        pendingBombCell = if (matches.size >= 5) {
-            chooseBombCell(matches, -1, -1)
-        } else {
-            null
-        }
+        val special = chooseSpecial(matches, -1, -1)
+        pendingSpecialCell = special?.first
+        pendingSpecialType = special?.second ?: -1
+        pendingSpecialDirection = special?.third ?: 0
         return true
     }
 
@@ -110,25 +124,32 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         }
 
         val matches = pendingMatches
-        val bombCell = pendingBombCell
+        val specialCell = pendingSpecialCell
+        val specialType = pendingSpecialType
+        val specialDirection = pendingSpecialDirection
+
         pendingMatches = emptySet()
-        pendingBombCell = null
+        pendingSpecialCell = null
+        pendingSpecialType = -1
+        pendingSpecialDirection = 0
 
         score += matches.size * 10
 
-        if (bombCell != null && bombCell in matches) {
+        if (specialCell != null && specialType >= 0) {
             for ((r, c) in matches) {
-                if (r != bombCell.first || c != bombCell.second) {
-                    board[r][c] = null
-                }
+                board[r][c] = null
             }
-            board[bombCell.first][bombCell.second] =
-                Candy(Candy.BOMB_TYPE, bombCell.first, bombCell.second)
+
+            val fallingCandies = compactAndRefill()
+            board[specialCell.first][specialCell.second] =
+                Candy(specialType, specialCell.first, specialCell.second, specialDirection)
 
             return ResolveStep(
                 matchedCount = matches.size,
-                fallingCandies = emptyList(),
-                bombCell = bombCell
+                fallingCandies = fallingCandies,
+                specialCell = specialCell,
+                specialType = specialType,
+                specialDirection = specialDirection
             )
         }
 
@@ -138,34 +159,149 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
         return ResolveStep(
             matchedCount = matches.size,
-            fallingCandies = compactAndRefill(),
-            bombCell = null
+            fallingCandies = compactAndRefill()
         )
     }
 
-    fun detonateBomb(row: Int, col: Int): BombDetonation? {
+    fun detonateBomb(row: Int, col: Int, directionRow: Int, directionCol: Int): BombDetonation? {
         val bomb = board.getOrNull(row)?.getOrNull(col) ?: return null
         if (bomb.type != Candy.BOMB_TYPE) return null
 
-        val explosionCells = mutableListOf<Pair<Int, Int>>()
-        var affectedCount = 0
+        val dr = directionRow.coerceIn(-1, 1)
+        val dc = directionCol.coerceIn(-1, 1)
+        if (dr == 0 && dc == 0) return null
 
-        for (r in row - 1..row + 1) {
-            for (c in col - 1..col + 1) {
-                if (r in 0 until rows && c in 0 until cols) {
-                    explosionCells += r to c
-                    if (board[r][c] != null) affectedCount++
-                    board[r][c] = null
+        val explosionCells = mutableListOf<Pair<Int, Int>>()
+        var r = row
+        var c = col
+
+        while (r in 0 until rows && c in 0 until cols) {
+            explosionCells += r to c
+            r += dr
+            c += dc
+        }
+
+        var affectedCount = 0
+        for ((er, ec) in explosionCells) {
+            if (board[er][ec] != null) {
+                affectedCount++
+                board[er][ec] = null
+            }
+        }
+
+        score += affectedCount * 8
+
+        return BombDetonation(
+            explosionCells = explosionCells,
+            fallingCandies = compactAndRefill(),
+            affectedCount = affectedCount
+        )
+    }
+
+    fun prepareRocketLaunch(row: Int, col: Int): Pair<Int, Int>? {
+        val rocket = board.getOrNull(row)?.getOrNull(col) ?: return null
+        if (rocket.type != Candy.ROCKET_TYPE) return null
+
+        val candidates = mutableListOf<Pair<Int, Int>>()
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                if (r == row && c == col) continue
+                val candy = board[r][c] ?: continue
+                if (candy.type in 0 until Candy.NUM_TYPES) {
+                    candidates += r to c
                 }
             }
         }
 
-        score += affectedCount * 5
+        return candidates.randomOrNull()
+    }
 
-        return BombDetonation(
-            explosionCells = explosionCells,
-            fallingCandies = compactAndRefill()
+    fun finishRocketLaunch(
+        startRow: Int,
+        startCol: Int,
+        targetRow: Int,
+        targetCol: Int
+    ): RocketLaunch? {
+        val rocket = board.getOrNull(startRow)?.getOrNull(startCol) ?: return null
+        if (rocket.type != Candy.ROCKET_TYPE) return null
+
+        if (targetRow !in 0 until rows || targetCol !in 0 until cols) return null
+
+        val affectedCount = if (board[targetRow][targetCol] != null) 1 else 0
+        board[startRow][startCol] = null
+        board[targetRow][targetCol] = null
+        score += 45
+
+        return RocketLaunch(
+            startCell = startRow to startCol,
+            targetCell = targetRow to targetCol,
+            fallingCandies = compactAndRefill(),
+            affectedCount = affectedCount
         )
+    }
+
+    fun removeCell(row: Int, col: Int): List<FallingCandy> {
+        if (row !in 0 until rows || col !in 0 until cols) return emptyList()
+        if (board[row][col] == null) return emptyList()
+        board[row][col] = null
+        score += 15
+        return compactAndRefill()
+    }
+
+    fun clearCross(row: Int, col: Int): List<FallingCandy> {
+        if (row !in 0 until rows || col !in 0 until cols) return emptyList()
+        var cleared = 0
+        for (c in 0 until cols) {
+            if (board[row][c] != null) {
+                board[row][c] = null
+                cleared++
+            }
+        }
+        for (r in 0 until rows) {
+            if (r != row && board[r][col] != null) {
+                board[r][col] = null
+                cleared++
+            }
+        }
+        score += cleared * 4
+        return compactAndRefill()
+    }
+
+    fun shuffle() {
+        val values = mutableListOf<Int>()
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val candy = board[r][c]
+                if (candy != null && candy.type in 0 until Candy.NUM_TYPES) {
+                    values += candy.type
+                }
+            }
+        }
+
+        values.shuffle()
+        var index = 0
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                board[r][c] = Candy(
+                    values.getOrNull(index) ?: Random.nextInt(Candy.NUM_TYPES),
+                    r,
+                    c
+                )
+                index++
+            }
+        }
+
+        var safety = 0
+        while (findMatches().isNotEmpty() && safety++ < 100) {
+            val matches = findMatches()
+            for ((r, c) in matches) {
+                board[r][c] = Candy(Random.nextInt(Candy.NUM_TYPES), r, c)
+            }
+        }
+    }
+
+    fun addMoves(amount: Int) {
+        movesLeft += amount.coerceAtLeast(0)
     }
 
     private fun compactAndRefill(): List<FallingCandy> {
@@ -178,9 +314,16 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 val cell = board[r][c]
                 if (cell != null) {
                     if (write != r) {
-                        falling += FallingCandy(cell.type, c, r.toFloat(), write.toFloat())
+                        falling += FallingCandy(
+                            type = cell.type,
+                            column = c,
+                            startRow = r.toFloat(),
+                            endRow = write.toFloat(),
+                            specialDirection = cell.specialDirection
+                        )
                     }
-                    board[write][c] = Candy(cell.type, write, c)
+                    board[write][c] =
+                        Candy(cell.type, write, c, cell.specialDirection)
                     if (write != r) {
                         board[r][c] = null
                     }
@@ -194,24 +337,97 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 val startRow = -(missing - r).toFloat()
                 val type = Random.nextInt(Candy.NUM_TYPES)
                 board[finalRow][c] = Candy(type, finalRow, c)
-                falling += FallingCandy(type, c, startRow, finalRow.toFloat())
+                falling += FallingCandy(
+                    type = type,
+                    column = c,
+                    startRow = startRow,
+                    endRow = finalRow.toFloat()
+                )
             }
         }
 
         return falling
     }
 
-    private fun chooseBombCell(
+    private fun chooseSpecial(
         matches: Set<Pair<Int, Int>>,
         preferredRow: Int,
         preferredCol: Int
-    ): Pair<Int, Int> {
-        val preferred = preferredRow to preferredCol
-        if (preferredRow >= 0 && preferred in matches) return preferred
+    ): Triple<Pair<Int, Int>, Int, Int>? {
+        if (matches.isEmpty()) return null
 
-        return matches
-            .sortedWith(compareBy<Pair<Int, Int>> { it.first }.thenBy { it.second })
-            .elementAt(matches.size / 2)
+        var bestLength = 0
+        var bestHorizontal = true
+        var bestCells: List<Pair<Int, Int>> = emptyList()
+
+        for (r in 0 until rows) {
+            var start = 0
+            while (start < cols) {
+                val type = board[r][start]?.type
+                if (type !in 0 until Candy.NUM_TYPES) {
+                    start++
+                    continue
+                }
+
+                var end = start + 1
+                while (end < cols && board[r][end]?.type == type) end++
+                val length = end - start
+                if (length >= 4 && length > bestLength) {
+                    bestLength = length
+                    bestHorizontal = true
+                    bestCells = (start until end).map { r to it }
+                }
+                start = end
+            }
+        }
+
+        for (c in 0 until cols) {
+            var start = 0
+            while (start < rows) {
+                val type = board[start][c]?.type
+                if (type !in 0 until Candy.NUM_TYPES) {
+                    start++
+                    continue
+                }
+
+                var end = start + 1
+                while (end < rows && board[end][c]?.type == type) end++
+                val length = end - start
+                if (length >= 5 && length > bestLength) {
+                    bestLength = length
+                    bestHorizontal = false
+                    bestCells = (start until end).map { it to c }
+                } else if (length >= 4 && length > bestLength) {
+                    bestLength = length
+                    bestHorizontal = false
+                    bestCells = (start until end).map { it to c }
+                }
+                start = end
+            }
+        }
+
+        if (bestLength < 4) return null
+
+        var cell = if (preferredRow >= 0 && preferredRow to preferredCol in bestCells) {
+            preferredRow to preferredCol
+        } else {
+            bestCells[bestCells.size / 2]
+        }
+
+        val specialType =
+            if (bestLength >= 5) Candy.BOMB_TYPE else Candy.ROCKET_TYPE
+
+        val direction = if (bestHorizontal) 0 else 1
+
+        if (specialType == Candy.BOMB_TYPE && preferredRow >= 0) {
+            cell = if (preferredRow to preferredCol in bestCells) {
+                preferredRow to preferredCol
+            } else {
+                bestCells[bestCells.size / 2]
+            }
+        }
+
+        return Triple(cell, specialType, direction)
     }
 
     private fun isMatchable(candy: Candy?): Boolean {
