@@ -1,5 +1,8 @@
 package com.tomasthrawat.candycrush.model
 
+private const val UNLIMITED_MOVES = Int.MAX_VALUE
+private const val SCORE_MULTIPLIER = 5
+
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -65,7 +68,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     fun reset(moves: Int = 24, target: Int = 650) {
         score = 0
-        movesLeft = moves
+        movesLeft = UNLIMITED_MOVES
         targetScore = target
         pendingMatches = emptySet()
         pendingSpecialCell = null
@@ -90,7 +93,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     fun restoreTypes(snapshot: IntArray, savedScore: Int, savedMoves: Int, savedTarget: Int) {
         if (snapshot.size != rows * cols) {
-            reset(savedMoves.coerceAtLeast(1), savedTarget.coerceAtLeast(1))
+            reset(UNLIMITED_MOVES, savedTarget.coerceAtLeast(1))
             return
         }
         var i = 0
@@ -101,7 +104,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             }
         }
         score = savedScore.coerceAtLeast(0)
-        movesLeft = savedMoves.coerceAtLeast(0)
+        movesLeft = UNLIMITED_MOVES
         targetScore = savedTarget.coerceAtLeast(1)
         pendingMatches = emptySet()
         pendingSpecialCell = null
@@ -112,14 +115,14 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         if (findMatches().isNotEmpty() || !hasPossibleMove()) {
             fillFreshPlayableBoard()
             score = savedScore.coerceAtLeast(0)
-            movesLeft = savedMoves.coerceAtLeast(0)
+            movesLeft = UNLIMITED_MOVES
             targetScore = savedTarget.coerceAtLeast(1)
         }
     }
 
     fun swap(r1: Int, c1: Int, r2: Int, c2: Int, requestedRocketDirection: Int = 0): Boolean {
         if (!isAdjacent(r1, c1, r2, c2)) return false
-        if (movesLeft <= 0 || pendingMatches.isNotEmpty()) return false
+        if (pendingMatches.isNotEmpty()) return false
 
         val a = get(r1, c1) ?: return false
         val b = get(r2, c2) ?: return false
@@ -130,7 +133,6 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             board[r1][c1] = Candy(b.type, r1, c1, b.specialDirection)
             board[r2][c2] = Candy(a.type, r2, c2, a.specialDirection)
 
-            movesLeft--
             val bombRow = if (aIsColorBomb) r2 else r1
             val bombCol = if (aIsColorBomb) c2 else c1
             val target = if (aIsColorBomb) b.type else a.type
@@ -160,7 +162,6 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
             return false
         }
 
-        movesLeft--
         pendingSpecialActivated = false
         pendingColorBombTargetType = -1
         val special = chooseSpecial(matches, r1, c1, r2, c2, requestedRocketDirection)
@@ -209,7 +210,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
         if (matches.isEmpty()) return ResolveStep(0, emptySet(), emptyList(), specialCell, specialType, specialDirection, specialActivated)
 
-        score += matches.size * if (specialActivated) 32 else 30
+        addScore(matches.size * if (specialActivated) 32 else 30)
         for ((r, c) in matches) board[r][c] = null
         val falling = compactAndRefill(specialCell)
 
@@ -242,7 +243,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 affected++
             }
         }
-        score += affected * 32
+        addScore(affected * 32)
 
         return ColorBombDetonation(
             centerCell = row to col,
@@ -329,7 +330,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 affected++
             }
         }
-        score += affected * 24
+        addScore(affected * 24)
         return BombDetonation(cells.toList(), compactAndRefill(), affected)
     }
 
@@ -358,14 +359,14 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 affected++
             }
         }
-        score += affected * 36
+        addScore(affected * 36)
         return RocketLaunch(startRow to startCol, targetRow to targetCol, compactAndRefill(), affected)
     }
 
     fun removeCell(row: Int, col: Int): List<FallingCandy> {
         if (get(row, col) == null) return emptyList()
         board[row][col] = null
-        score += 45
+        addScore(45)
         return compactAndRefill()
     }
 
@@ -384,7 +385,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
                 cleared++
             }
         }
-        score += cleared * 12
+        addScore(cleared * 12)
         return compactAndRefill()
     }
 
@@ -413,9 +414,17 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         return false
     }
 
-    fun addMoves(amount: Int) { movesLeft = (movesLeft + amount).coerceAtMost(60) }
+    fun addMoves(amount: Int) {
+        if (amount > 0) movesLeft = UNLIMITED_MOVES
+    }
 
-    fun isGameOver(): Boolean = movesLeft <= 0 && score < targetScore
+    private fun addScore(basePoints: Int) {
+        if (basePoints <= 0) return
+        val added = basePoints.toLong() * SCORE_MULTIPLIER.toLong()
+        score = (score.toLong() + added).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    fun isGameOver(): Boolean = false
 
     private fun fillFreshPlayableBoard() {
         repeat(500) {

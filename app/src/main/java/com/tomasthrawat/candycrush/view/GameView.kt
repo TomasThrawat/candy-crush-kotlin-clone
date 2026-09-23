@@ -38,7 +38,7 @@ class GameView @JvmOverloads constructor(
     private enum class Helper(val title: String, val price: Int) {
         HAMMER("HAMMER", 60),
         CROSS("CROSS BLAST", 90),
-        MOVES("+5 MOVES", 120)
+        MOVES("∞ MOVES", 120)
     }
 
     private data class Particle(
@@ -327,7 +327,7 @@ class GameView @JvmOverloads constructor(
         val top = dp(66f)
         val bottom = dp(108f)
         drawHudChip(canvas, RectF(left, top, left + chipW, bottom), "SCORE", board.score.toString(), accent)
-        drawHudChip(canvas, RectF(left + chipW + gap, top, left + chipW * 2f + gap, bottom), "MOVES", board.movesLeft.toString(), cream)
+        drawHudChip(canvas, RectF(left + chipW + gap, top, left + chipW * 2f + gap, bottom), "MOVES", "∞", cream)
         drawHudChip(canvas, RectF(left + chipW * 2f + gap * 2f, top, width - left, bottom), "COINS", (viewModel?.coins ?: 0).toString(), accent)
 
         rect.set(dp(16f), dp(114f), width - dp(16f), dp(120f))
@@ -797,7 +797,7 @@ class GameView @JvmOverloads constructor(
             val label = when (item) {
                 Helper.HAMMER -> "HAMMER"
                 Helper.CROSS -> "CROSS"
-                Helper.MOVES -> "+5 MOVES"
+                Helper.MOVES -> "∞ MOVES"
             }
             canvas.drawText(label, cx, slot.top + dp(43f), smallTextPaint)
 
@@ -929,7 +929,7 @@ class GameView @JvmOverloads constructor(
         val descriptions = arrayOf(
             "Remove one candy without using a move.",
             "Clear the full row and column at one cell.",
-            "Add five moves immediately."
+            "Unlimited moves are already active."
         )
         val list = Helper.values()
         for (i in list.indices) {
@@ -1411,7 +1411,7 @@ class GameView @JvmOverloads constructor(
             Helper.MOVES -> {
                 board.addMoves(5)
                 model.helperCounts[item.ordinal]--
-                floatingTexts += FloatingText(width / 2f, boardTop - dp(8f), "+5 MOVES", 0.9f)
+                floatingTexts += FloatingText(width / 2f, boardTop - dp(8f), "∞ MOVES", 0.9f)
                 sound.playReward()
                 helper = null
             }
