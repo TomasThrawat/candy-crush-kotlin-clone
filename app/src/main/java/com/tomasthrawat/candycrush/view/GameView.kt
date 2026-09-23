@@ -274,20 +274,28 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawBackground(canvas: Canvas) {
-        boardPaint.shader = backgroundShader
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), boardPaint)
-        boardPaint.shader = null
+    boardPaint.shader = backgroundShader
+    canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), boardPaint)
+    boardPaint.shader = null
 
-        val safeWidth = maxOf(width.toFloat(), 1f)
-        val safeHeight = maxOf(height.toFloat() - dp(20f), 1f)
-        for (i in 0 until 16) {
-            val x = (i * dp(73f)) % safeWidth
-            val y = dp(20f) + (i * dp(57f)) % safeHeight
-            val r = dp((2 + i % 4).toFloat())
-            boardPaint.color = Color.argb(34 + (i % 3) * 10, 255, 235, 170)
-            canvas.drawCircle(x, y, r, boardPaint)
-        }
+    val w = width.toFloat()
+    val h = height.toFloat()
+
+    boardPaint.color = Color.argb(28, 255, 221, 140)
+    canvas.drawCircle(w * 0.12f, h * 0.10f, dp(82f), boardPaint)
+    boardPaint.color = Color.argb(20, 196, 151, 255)
+    canvas.drawCircle(w * 0.92f, h * 0.31f, dp(108f), boardPaint)
+    boardPaint.color = Color.argb(18, 255, 118, 172)
+    canvas.drawCircle(w * 0.76f, h * 0.82f, dp(125f), boardPaint)
+
+    for (i in 0 until 18) {
+        val x = (dp(31f) + i * dp(47f)) % (w.coerceAtLeast(dp(1f)))
+        val y = dp(22f) + (i * dp(71f)) % (h.coerceAtLeast(dp(1f)))
+        val r = dp((1.5f + (i % 3) * 1.15f))
+        boardPaint.color = Color.argb(22 + (i % 3) * 8, 255, 240, 192)
+        canvas.drawCircle(x, y, r, boardPaint)
     }
+}
 
     private fun drawGame(canvas: Canvas) {
         drawTopHud(canvas)
@@ -302,43 +310,51 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawTopHud(canvas: Canvas) {
-        titlePaint.textAlign = Paint.Align.LEFT
-        titlePaint.color = cream
-        titlePaint.textSize = sp(20f)
-        canvas.drawText("LEVEL " + (viewModel?.currentLevel ?: 1L), dp(16f), dp(31f), titlePaint)
+    rect.set(dp(12f), dp(10f), width - dp(12f), dp(59f))
+    boardPaint.color = Color.argb(90, 8, 7, 22)
+    canvas.drawRoundRect(RectF(rect.left, rect.top + dp(4f), rect.right, rect.bottom + dp(4f)), dp(18f), dp(18f), boardPaint)
+    boardPaint.color = Color.rgb(55, 42, 83)
+    canvas.drawRoundRect(rect, dp(18f), dp(18f), boardPaint)
 
-        titlePaint.color = Color.argb(175, 255, 245, 222)
-        titlePaint.textSize = sp(10f)
-        canvas.drawText("TARGET " + board.targetScore, dp(16f), dp(50f), titlePaint)
+    boardPaint.color = Color.rgb(255, 214, 105)
+    canvas.drawRoundRect(RectF(rect.left, rect.top, rect.left + dp(5f), rect.bottom), dp(3f), dp(3f), boardPaint)
 
-        val menu = gameMenuButtonRect()
-        boardPaint.color = Color.argb(70, 0, 0, 0)
-        canvas.drawRoundRect(RectF(menu.left, menu.top + dp(4f), menu.right, menu.bottom + dp(4f)), dp(16f), dp(16f), boardPaint)
-        boardPaint.color = panel2
-        canvas.drawRoundRect(menu, dp(16f), dp(16f), boardPaint)
-        outlinePaint.color = Color.argb(120, 255, 224, 130)
-        outlinePaint.strokeWidth = dp(1.2f)
-        canvas.drawRoundRect(menu, dp(16f), dp(16f), outlinePaint)
-        drawMenuGlyph(canvas, menu.centerX(), menu.centerY())
+    titlePaint.textAlign = Paint.Align.LEFT
+    titlePaint.color = cream
+    titlePaint.textSize = sp(19f)
+    canvas.drawText("LEVEL " + (viewModel?.currentLevel ?: 1L), dp(27f), dp(33f), titlePaint)
 
-        val gap = dp(6f)
-        val left = dp(16f)
-        val chipW = (width - dp(32f) - gap * 2f) / 3f
-        val top = dp(66f)
-        val bottom = dp(108f)
-        drawHudChip(canvas, RectF(left, top, left + chipW, bottom), "SCORE", board.score.toString(), accent)
-        drawHudChip(canvas, RectF(left + chipW + gap, top, left + chipW * 2f + gap, bottom), "MOVES", "∞", cream)
-        drawHudChip(canvas, RectF(left + chipW * 2f + gap * 2f, top, width - left, bottom), "COINS", (viewModel?.coins ?: 0).toString(), accent)
+    smallTextPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.color = Color.argb(168, 255, 245, 222)
+    smallTextPaint.textSize = sp(8.5f)
+    canvas.drawText("TARGET " + board.targetScore, dp(27f), dp(48f), smallTextPaint)
 
-        rect.set(dp(16f), dp(114f), width - dp(16f), dp(120f))
-        boardPaint.color = Color.argb(110, 255, 255, 255)
-        canvas.drawRoundRect(rect, dp(3f), dp(3f), boardPaint)
-        boardPaint.color = accent
-        rect.right = rect.left + rect.width() * (board.score.toFloat() / board.targetScore).coerceIn(0f, 1f)
-        canvas.drawRoundRect(rect, dp(3f), dp(3f), boardPaint)
+    val menu = gameMenuButtonRect()
+    boardPaint.color = Color.rgb(76, 59, 108)
+    canvas.drawRoundRect(menu, dp(15f), dp(15f), boardPaint)
+    outlinePaint.color = Color.argb(125, 255, 224, 130)
+    outlinePaint.strokeWidth = dp(1.15f)
+    canvas.drawRoundRect(menu, dp(15f), dp(15f), outlinePaint)
+    drawMenuGlyph(canvas, menu.centerX(), menu.centerY())
 
-        titlePaint.textAlign = Paint.Align.LEFT
-    }
+    val gap = dp(7f)
+    val left = dp(14f)
+    val chipW = (width - dp(28f) - gap * 2f) / 3f
+    val top = dp(68f)
+    val bottom = dp(109f)
+    drawHudChip(canvas, RectF(left, top, left + chipW, bottom), "SCORE", board.score.toString(), accent)
+    drawHudChip(canvas, RectF(left + chipW + gap, top, left + chipW * 2f + gap, bottom), "MOVES", "∞", cream)
+    drawHudChip(canvas, RectF(left + chipW * 2f + gap * 2f, top, width - left, bottom), "COINS", (viewModel?.coins ?: 0).toString(), accent)
+
+    rect.set(dp(16f), dp(115f), width - dp(16f), dp(121f))
+    boardPaint.color = Color.argb(75, 255, 255, 255)
+    canvas.drawRoundRect(rect, dp(3f), dp(3f), boardPaint)
+    boardPaint.color = accent
+    rect.right = rect.left + rect.width() * (board.score.toFloat() / board.targetScore).coerceIn(0f, 1f)
+    canvas.drawRoundRect(rect, dp(3f), dp(3f), boardPaint)
+
+    smallTextPaint.textAlign = Paint.Align.LEFT
+}
 
     private fun drawMenuGlyph(canvas: Canvas, cx: Float, cy: Float) {
         outlinePaint.style = Paint.Style.STROKE
@@ -353,33 +369,45 @@ class GameView @JvmOverloads constructor(
         RectF(width - dp(64f), dp(12f), width - dp(12f), dp(60f))
 
     private fun drawHudChip(canvas: Canvas, chip: RectF, label: String, value: String, valueColor: Int) {
-        boardPaint.color = Color.argb(80, 0, 0, 0)
-        canvas.drawRoundRect(RectF(chip.left, chip.top + dp(4f), chip.right, chip.bottom + dp(4f)), dp(15f), dp(15f), boardPaint)
-        boardPaint.color = panel2
-        canvas.drawRoundRect(chip, dp(15f), dp(15f), boardPaint)
+    boardPaint.color = Color.argb(78, 0, 0, 0)
+    canvas.drawRoundRect(RectF(chip.left, chip.top + dp(3f), chip.right, chip.bottom + dp(3f)), dp(15f), dp(15f), boardPaint)
+    boardPaint.color = Color.rgb(49, 42, 75)
+    canvas.drawRoundRect(chip, dp(15f), dp(15f), boardPaint)
 
-        smallTextPaint.textAlign = Paint.Align.CENTER
-        smallTextPaint.color = Color.argb(150, 255, 245, 222)
-        smallTextPaint.textSize = sp(8f)
-        canvas.drawText(label, chip.centerX(), chip.top + dp(14f), smallTextPaint)
+    boardPaint.color = Color.argb(40, Color.red(valueColor), Color.green(valueColor), Color.blue(valueColor))
+    canvas.drawCircle(chip.left + dp(15f), chip.centerY(), dp(6f), boardPaint)
+    boardPaint.color = valueColor
+    canvas.drawCircle(chip.left + dp(15f), chip.centerY(), dp(3f), boardPaint)
 
-        smallTextPaint.color = valueColor
-        smallTextPaint.textSize = sp(15f)
-        canvas.drawText(value, chip.centerX(), chip.bottom - dp(10f), smallTextPaint)
-        smallTextPaint.textAlign = Paint.Align.LEFT
-    }
+    smallTextPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.color = Color.argb(150, 255, 245, 222)
+    smallTextPaint.textSize = sp(7.5f)
+    canvas.drawText(label, chip.left + dp(28f), chip.top + dp(14f), smallTextPaint)
+
+    smallTextPaint.color = valueColor
+    smallTextPaint.textSize = sp(14f)
+    canvas.drawText(value, chip.left + dp(28f), chip.bottom - dp(9f), smallTextPaint)
+}
 
     private fun drawBoardPanel(canvas: Canvas) {
-        val p = dp(8f)
-        rect.set(boardLeft - p, boardTop - p, boardLeft + boardSize + p, boardTop + boardSize + p)
-        boardPaint.color = Color.argb(85, 0, 0, 0)
-        canvas.drawRoundRect(RectF(rect.left, rect.top + dp(7f), rect.right, rect.bottom + dp(7f)), dp(24f), dp(24f), boardPaint)
-        boardPaint.color = Color.rgb(42, 34, 67)
-        canvas.drawRoundRect(rect, dp(24f), dp(24f), boardPaint)
-        outlinePaint.color = Color.argb(115, 255, 226, 150)
-        outlinePaint.strokeWidth = dp(1.5f)
-        canvas.drawRoundRect(rect, dp(23f), dp(23f), outlinePaint)
-    }
+    val p = dp(8f)
+    rect.set(boardLeft - p, boardTop - p, boardLeft + boardSize + p, boardTop + boardSize + p)
+
+    boardPaint.color = Color.argb(86, 0, 0, 0)
+    canvas.drawRoundRect(RectF(rect.left, rect.top + dp(8f), rect.right, rect.bottom + dp(8f)), dp(24f), dp(24f), boardPaint)
+
+    boardPaint.shader = LinearGradient(
+        rect.left, rect.top, rect.right, rect.bottom,
+        Color.rgb(70, 54, 101), Color.rgb(37, 31, 60),
+        Shader.TileMode.CLAMP
+    )
+    canvas.drawRoundRect(rect, dp(24f), dp(24f), boardPaint)
+    boardPaint.shader = null
+
+    outlinePaint.color = Color.argb(125, 255, 227, 154)
+    outlinePaint.strokeWidth = dp(1.35f)
+    canvas.drawRoundRect(rect, dp(23f), dp(23f), outlinePaint)
+}
 
     private fun drawBoard(canvas: Canvas) {
         val fallingTargets = HashSet<Pair<Int, Int>>()
@@ -433,19 +461,28 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawCellSlot(canvas: Canvas, cx: Float, cy: Float, row: Int, col: Int) {
-        val gap = cellSize * 0.055f
-        rect.set(
-            cx - cellSize / 2f + gap,
-            cy - cellSize / 2f + gap,
-            cx + cellSize / 2f - gap,
-            cy + cellSize / 2f - gap
-        )
-        boardPaint.color = Color.argb(if ((row + col) % 2 == 0) 72 else 54, 255, 255, 255)
-        canvas.drawRoundRect(rect, cellSize * 0.18f, cellSize * 0.18f, boardPaint)
-        outlinePaint.color = Color.argb(34, 255, 255, 255)
-        outlinePaint.strokeWidth = dp(1f)
-        canvas.drawRoundRect(rect, cellSize * 0.18f, cellSize * 0.18f, outlinePaint)
-    }
+    val gap = cellSize * 0.055f
+    rect.set(
+        cx - cellSize / 2f + gap,
+        cy - cellSize / 2f + gap,
+        cx + cellSize / 2f - gap,
+        cy + cellSize / 2f - gap
+    )
+
+    val checker = if ((row + col) % 2 == 0) 78 else 62
+    boardPaint.color = Color.argb(checker, 20, 16, 39)
+    canvas.drawRoundRect(rect, cellSize * 0.18f, cellSize * 0.18f, boardPaint)
+
+    boardPaint.color = Color.argb(18, 255, 238, 192)
+    canvas.drawRoundRect(
+        RectF(rect.left + dp(2f), rect.top + dp(2f), rect.right - dp(2f), rect.top + dp(4f)),
+        dp(2f), dp(2f), boardPaint
+    )
+
+    outlinePaint.color = Color.argb(35, 255, 248, 220)
+    outlinePaint.strokeWidth = dp(0.9f)
+    canvas.drawRoundRect(rect, cellSize * 0.18f, cellSize * 0.18f, outlinePaint)
+}
 
     private fun drawCandy(
         canvas: Canvas,
@@ -757,139 +794,186 @@ class GameView @JvmOverloads constructor(
         shuffleAnimator?.isRunning == true
  
     private fun drawBottomBar(canvas: Canvas) {
-        rect.set(dp(10f), bottomBarTop + dp(4f), width - dp(10f), height - dp(8f))
-        boardPaint.color = Color.argb(238, 24, 22, 45)
-        canvas.drawRoundRect(rect, dp(24f), dp(24f), boardPaint)
-        outlinePaint.color = Color.argb(62, 255, 226, 150)
-        outlinePaint.strokeWidth = dp(1f)
-        canvas.drawRoundRect(rect, dp(24f), dp(24f), outlinePaint)
+    rect.set(dp(10f), bottomBarTop + dp(4f), width - dp(10f), height - dp(8f))
+    boardPaint.color = Color.argb(235, 20, 18, 39)
+    canvas.drawRoundRect(rect, dp(24f), dp(24f), boardPaint)
+    outlinePaint.color = Color.argb(72, 255, 226, 150)
+    outlinePaint.strokeWidth = dp(1f)
+    canvas.drawRoundRect(rect, dp(24f), dp(24f), outlinePaint)
 
-        smallTextPaint.textAlign = Paint.Align.LEFT
-        smallTextPaint.color = Color.argb(170, 255, 245, 222)
-        smallTextPaint.textSize = sp(8f)
-        canvas.drawText("BOOSTERS", dp(18f), bottomBarTop + dp(17f), smallTextPaint)
+    smallTextPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.color = Color.argb(150, 255, 245, 222)
+    smallTextPaint.textSize = sp(7.5f)
+    canvas.drawText("BOOSTERS", dp(19f), bottomBarTop + dp(16f), smallTextPaint)
 
-        val helperList = Helper.values()
-        val gap = dp(7f)
-        val left = dp(16f)
-        val slotW = (width - dp(32f) - gap * 2f) / 3f
-        for (i in helperList.indices) {
-            val item = helperList[i]
-            val slot = RectF(
-                left + (slotW + gap) * i,
-                bottomBarTop + dp(23f),
-                left + (slotW + gap) * i + slotW,
-                height - dp(13f)
-            )
-            val active = helper == item
-            boardPaint.color = if (active) Color.rgb(102, 73, 145) else Color.rgb(52, 46, 76)
-            canvas.drawRoundRect(slot, dp(17f), dp(17f), boardPaint)
-            outlinePaint.color = Color.argb(if (active) 130 else 48, 255, 223, 132)
-            outlinePaint.strokeWidth = dp(1f)
-            canvas.drawRoundRect(slot, dp(17f), dp(17f), outlinePaint)
+    val helperList = Helper.values()
+    val gap = dp(7f)
+    val left = dp(16f)
+    val slotW = (width - dp(32f) - gap * 2f) / 3f
 
-            val cx = slot.centerX()
-            drawHelperGlyph(canvas, cx, slot.top + dp(22f), i)
+    for (i in helperList.indices) {
+        val item = helperList[i]
+        val slot = RectF(
+            left + (slotW + gap) * i,
+            bottomBarTop + dp(23f),
+            left + (slotW + gap) * i + slotW,
+            height - dp(13f)
+        )
+        val active = helper == item
 
-            smallTextPaint.textAlign = Paint.Align.CENTER
-            smallTextPaint.color = cream
-            smallTextPaint.textSize = sp(7.5f)
-            val label = when (item) {
-                Helper.HAMMER -> "HAMMER"
-                Helper.CROSS -> "CROSS"
-                Helper.MOVES -> "∞ MOVES"
-            }
-            canvas.drawText(label, cx, slot.top + dp(43f), smallTextPaint)
-
-            val count = (viewModel?.helperCounts?.getOrNull(i) ?: 0).toString()
-            boardPaint.color = if (active) Color.rgb(47, 35, 71) else Color.rgb(37, 34, 55)
-            canvas.drawCircle(slot.right - dp(13f), slot.top + dp(13f), dp(8f), boardPaint)
-            smallTextPaint.color = if (active) accent else Color.argb(210, 255, 245, 222)
-            smallTextPaint.textSize = sp(7f)
-            canvas.drawText(count, slot.right - dp(13f), slot.top + dp(15.5f), smallTextPaint)
-        }
-        smallTextPaint.textAlign = Paint.Align.LEFT
-    }
-
-    private fun drawHelperGlyph(canvas: Canvas, cx: Float, cy: Float, index: Int) {
-        outlinePaint.style = Paint.Style.STROKE
-        outlinePaint.strokeWidth = dp(2.2f)
-        outlinePaint.color = accent
-        when (index) {
-            0 -> {
-                canvas.save()
-                canvas.rotate(-42f, cx, cy)
-                canvas.drawRoundRect(RectF(cx - dp(3f), cy - dp(11f), cx + dp(3f), cy + dp(7f)), dp(2f), dp(2f), outlinePaint)
-                canvas.drawLine(cx - dp(8f), cy - dp(6f), cx + dp(8f), cy - dp(6f), outlinePaint)
-                canvas.restore()
-            }
-            1 -> {
-                canvas.drawCircle(cx, cy, dp(9f), outlinePaint)
-                canvas.drawLine(cx - dp(6f), cy - dp(6f), cx + dp(6f), cy + dp(6f), outlinePaint)
-                canvas.drawLine(cx + dp(6f), cy - dp(6f), cx - dp(6f), cy + dp(6f), outlinePaint)
-            }
-            else -> {
-                canvas.drawCircle(cx, cy, dp(9f), outlinePaint)
-                textPaint.textAlign = Paint.Align.CENTER
-                textPaint.textSize = sp(10f)
-                textPaint.color = accent
-                canvas.drawText("+5", cx, cy + dp(4f), textPaint)
-                textPaint.textAlign = Paint.Align.LEFT
-            }
-        }
-    }
-
-    private fun drawMainMenu(canvas: Canvas) {
-        val cx = width / 2f
-        titlePaint.textAlign = Paint.Align.CENTER
-        titlePaint.color = cream
-        titlePaint.textSize = sp(43f)
-        canvas.drawText("CANDY", cx, dp(98f), titlePaint)
-        titlePaint.color = accent
-        titlePaint.textSize = sp(48f)
-        canvas.drawText("RUSH", cx, dp(145f), titlePaint)
-
-        drawCandyShape(canvas, 2, cx - dp(58f), dp(220f), dp(66f), 255)
-        drawCandyShape(canvas, 5, cx, dp(194f), dp(76f), 255)
-        drawCandyShape(canvas, 0, cx + dp(58f), dp(220f), dp(66f), 255)
-        drawCandyShape(canvas, 4, cx - dp(38f), dp(252f), dp(54f), 220)
-        drawCandyShape(canvas, 3, cx + dp(38f), dp(252f), dp(54f), 220)
-
-        smallTextPaint.textAlign = Paint.Align.CENTER
-        smallTextPaint.color = Color.argb(170, 255, 245, 222)
-        smallTextPaint.textSize = sp(9f)
-        canvas.drawText("MATCH • SWAP • COMBO", cx, dp(280f), smallTextPaint)
-        smallTextPaint.textAlign = Paint.Align.LEFT
-
-        drawMenuButton(canvas, RectF(dp(42f), dp(316f), width - dp(42f), dp(374f)), "PLAY")
-        drawMenuButton(canvas, RectF(dp(42f), dp(388f), width - dp(42f), dp(446f)), "LEVEL MAP")
-        drawMenuButton(canvas, RectF(dp(42f), dp(460f), width - dp(42f), dp(518f)), "HELPERS")
-        drawMenuButton(canvas, RectF(dp(42f), dp(532f), width - dp(42f), dp(590f)), "SHOP")
-
-        smallTextPaint.textAlign = Paint.Align.CENTER
-        smallTextPaint.color = Color.argb(145, 255, 245, 222)
-        smallTextPaint.textSize = sp(10f)
-        canvas.drawText("MATCH • CASCADE • COMBO", cx, height - dp(23f), smallTextPaint)
-        smallTextPaint.textAlign = Paint.Align.LEFT
-        titlePaint.textAlign = Paint.Align.LEFT
-    }
-
-    private fun drawMenuButton(canvas: Canvas, button: RectF, label: String) {
-        boardPaint.color = Color.argb(75, 0, 0, 0)
-        canvas.drawRoundRect(RectF(button.left, button.top + dp(5f), button.right, button.bottom + dp(5f)), dp(20f), dp(20f), boardPaint)
-        boardPaint.color = panel2
-        canvas.drawRoundRect(button, dp(20f), dp(20f), boardPaint)
-        boardPaint.color = Color.argb(120, 255, 229, 150)
+        boardPaint.color = if (active) Color.rgb(101, 74, 143) else Color.rgb(48, 43, 70)
+        canvas.drawRoundRect(slot, dp(17f), dp(17f), boardPaint)
+        boardPaint.color = Color.argb(if (active) 58 else 26, 255, 219, 120)
         canvas.drawRoundRect(
-            RectF(button.left + dp(3f), button.top + dp(3f), button.right - dp(3f), button.top + dp(6f)),
+            RectF(slot.left + dp(2f), slot.top + dp(2f), slot.right - dp(2f), slot.top + dp(5f)),
             dp(2f), dp(2f), boardPaint
         )
-        textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = cream
-        textPaint.textSize = sp(17f)
-        canvas.drawText(label, button.centerX(), button.centerY() + dp(6f), textPaint)
-        textPaint.textAlign = Paint.Align.LEFT
+        outlinePaint.color = Color.argb(if (active) 145 else 55, 255, 223, 132)
+        outlinePaint.strokeWidth = dp(1f)
+        canvas.drawRoundRect(slot, dp(17f), dp(17f), outlinePaint)
+
+        val cx = slot.centerX()
+        drawHelperGlyph(canvas, cx, slot.top + dp(21f), i)
+
+        smallTextPaint.textAlign = Paint.Align.CENTER
+        smallTextPaint.color = cream
+        smallTextPaint.textSize = sp(7f)
+        val label = when (item) {
+            Helper.HAMMER -> "HAMMER"
+            Helper.CROSS -> "CROSS"
+            Helper.MOVES -> "∞ MOVES"
+        }
+        canvas.drawText(label, cx, slot.top + dp(43f), smallTextPaint)
+
+        val count = (viewModel?.helperCounts?.getOrNull(i) ?: 0).toString()
+        boardPaint.color = if (active) Color.rgb(48, 35, 73) else Color.rgb(35, 31, 51)
+        canvas.drawCircle(slot.right - dp(13f), slot.top + dp(13f), dp(8f), boardPaint)
+        smallTextPaint.color = if (active) accent else Color.argb(205, 255, 245, 222)
+        smallTextPaint.textSize = sp(7f)
+        canvas.drawText(count, slot.right - dp(13f), slot.top + dp(15.5f), smallTextPaint)
     }
+    smallTextPaint.textAlign = Paint.Align.LEFT
+}
+
+    private fun drawHelperGlyph(canvas: Canvas, cx: Float, cy: Float, index: Int) {
+    outlinePaint.style = Paint.Style.STROKE
+    outlinePaint.strokeWidth = dp(2.1f)
+    outlinePaint.color = accent
+    when (index) {
+        0 -> {
+            canvas.save()
+            canvas.rotate(-42f, cx, cy)
+            canvas.drawRoundRect(RectF(cx - dp(3f), cy - dp(11f), cx + dp(3f), cy + dp(7f)), dp(2f), dp(2f), outlinePaint)
+            canvas.drawLine(cx - dp(8f), cy - dp(6f), cx + dp(8f), cy - dp(6f), outlinePaint)
+            canvas.restore()
+        }
+        1 -> {
+            canvas.drawCircle(cx, cy, dp(9f), outlinePaint)
+            canvas.drawLine(cx - dp(6f), cy - dp(6f), cx + dp(6f), cy + dp(6f), outlinePaint)
+            canvas.drawLine(cx + dp(6f), cy - dp(6f), cx - dp(6f), cy + dp(6f), outlinePaint)
+        }
+        else -> {
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = sp(17f)
+            textPaint.color = accent
+            canvas.drawText("∞", cx, cy + dp(6f), textPaint)
+            textPaint.textAlign = Paint.Align.LEFT
+        }
+    }
+}
+
+    private fun drawMainMenu(canvas: Canvas) {
+    val cx = width / 2f
+
+    rect.set(dp(16f), dp(20f), width - dp(16f), dp(74f))
+    boardPaint.color = Color.argb(80, 13, 11, 29)
+    canvas.drawRoundRect(RectF(rect.left, rect.top + dp(5f), rect.right, rect.bottom + dp(5f)), dp(22f), dp(22f), boardPaint)
+    boardPaint.color = Color.rgb(54, 42, 82)
+    canvas.drawRoundRect(rect, dp(22f), dp(22f), boardPaint)
+
+    smallTextPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.color = Color.argb(175, 255, 245, 222)
+    smallTextPaint.textSize = sp(8f)
+    canvas.drawText("CANDY RUSH", dp(31f), dp(42f), smallTextPaint)
+    smallTextPaint.color = accent
+    smallTextPaint.textSize = sp(11f)
+    canvas.drawText("∞ MOVES", dp(31f), dp(60f), smallTextPaint)
+
+    boardPaint.color = Color.rgb(93, 68, 126)
+    canvas.drawCircle(width - dp(48f), dp(47f), dp(17f), boardPaint)
+    textPaint.textAlign = Paint.Align.CENTER
+    textPaint.color = cream
+    textPaint.textSize = sp(10f)
+    canvas.drawText("30", width - dp(48f), dp(51f), textPaint)
+    textPaint.textAlign = Paint.Align.LEFT
+
+    titlePaint.textAlign = Paint.Align.CENTER
+    titlePaint.color = cream
+    titlePaint.textSize = sp(41f)
+    canvas.drawText("CANDY", cx, dp(112f), titlePaint)
+    titlePaint.color = accent
+    titlePaint.textSize = sp(48f)
+    canvas.drawText("RUSH", cx, dp(159f), titlePaint)
+
+    drawCandyShape(canvas, 2, cx - dp(60f), dp(225f), dp(66f), 255)
+    drawCandyShape(canvas, 5, cx, dp(199f), dp(78f), 255)
+    drawCandyShape(canvas, 0, cx + dp(60f), dp(225f), dp(66f), 255)
+    drawCandyShape(canvas, 4, cx - dp(40f), dp(257f), dp(54f), 225)
+    drawCandyShape(canvas, 3, cx + dp(40f), dp(257f), dp(54f), 225)
+
+    smallTextPaint.textAlign = Paint.Align.CENTER
+    smallTextPaint.color = Color.argb(175, 255, 245, 222)
+    smallTextPaint.textSize = sp(9f)
+    canvas.drawText("MATCH  •  CASCADE  •  COMBO", cx, dp(283f), smallTextPaint)
+
+    drawMenuButton(canvas, RectF(dp(42f), dp(316f), width - dp(42f), dp(374f)), "PLAY")
+    drawMenuButton(canvas, RectF(dp(42f), dp(388f), width - dp(42f), dp(446f)), "LEVEL MAP")
+    drawMenuButton(canvas, RectF(dp(42f), dp(460f), width - dp(42f), dp(518f)), "HELPERS")
+    drawMenuButton(canvas, RectF(dp(42f), dp(532f), width - dp(42f), dp(590f)), "SHOP")
+
+    smallTextPaint.color = Color.argb(125, 255, 245, 222)
+    smallTextPaint.textSize = sp(8.5f)
+    canvas.drawText("DESIGN-DRIVEN MATCH 3", cx, height - dp(21f), smallTextPaint)
+
+    smallTextPaint.textAlign = Paint.Align.LEFT
+    titlePaint.textAlign = Paint.Align.LEFT
+}
+
+    private fun drawMenuButton(canvas: Canvas, button: RectF, label: String) {
+    boardPaint.color = Color.argb(70, 0, 0, 0)
+    canvas.drawRoundRect(RectF(button.left, button.top + dp(5f), button.right, button.bottom + dp(5f)), dp(20f), dp(20f), boardPaint)
+
+    boardPaint.color = Color.rgb(63, 49, 94)
+    canvas.drawRoundRect(button, dp(20f), dp(20f), boardPaint)
+
+    boardPaint.color = Color.argb(90, 255, 220, 127)
+    canvas.drawRoundRect(
+        RectF(button.left + dp(3f), button.top + dp(3f), button.right - dp(3f), button.top + dp(6f)),
+        dp(2f), dp(2f), boardPaint
+    )
+
+    boardPaint.color = Color.rgb(115, 86, 154)
+    canvas.drawCircle(button.left + dp(20f), button.centerY(), dp(5f), boardPaint)
+
+    textPaint.textAlign = Paint.Align.CENTER
+    textPaint.color = cream
+    textPaint.textSize = sp(16.5f)
+    canvas.drawText(label, button.centerX(), button.centerY() + dp(5.5f), textPaint)
+
+    outlinePaint.color = Color.argb(45, 255, 245, 222)
+    outlinePaint.strokeWidth = dp(1f)
+    canvas.drawRoundRect(button, dp(20f), dp(20f), outlinePaint)
+
+    outlinePaint.style = Paint.Style.STROKE
+    outlinePaint.strokeWidth = dp(1.8f)
+    outlinePaint.color = accent
+    val cx = button.right - dp(20f)
+    val cy = button.centerY()
+    canvas.drawLine(cx - dp(3f), cy - dp(4f), cx + dp(1f), cy, outlinePaint)
+    canvas.drawLine(cx + dp(1f), cy, cx - dp(3f), cy + dp(4f), outlinePaint)
+
+    textPaint.textAlign = Paint.Align.LEFT
+}
 
     private fun drawShop(canvas: Canvas) {
         drawSubscreenHeader(canvas, "HELPER SHOP")
@@ -952,69 +1036,103 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawSubscreenHeader(canvas: Canvas, title: String) {
-        textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = cream
-        textPaint.textSize = sp(24f)
-        canvas.drawText(title, width / 2f, dp(48f), textPaint)
-        textPaint.textAlign = Paint.Align.LEFT
+    rect.set(dp(14f), dp(14f), width - dp(14f), dp(70f))
+    boardPaint.color = Color.argb(82, 0, 0, 0)
+    canvas.drawRoundRect(RectF(rect.left, rect.top + dp(4f), rect.right, rect.bottom + dp(4f)), dp(21f), dp(21f), boardPaint)
+    boardPaint.color = Color.rgb(55, 42, 83)
+    canvas.drawRoundRect(rect, dp(21f), dp(21f), boardPaint)
 
-        smallTextPaint.color = accent
-        smallTextPaint.textSize = sp(11f)
-        canvas.drawText("COINS " + (viewModel?.coins ?: 0), dp(18f), dp(78f), smallTextPaint)
-        boardPaint.color = Color.argb(70, 255, 255, 255)
-        canvas.drawRect(dp(18f), dp(91f), width - dp(18f), dp(92f), boardPaint)
-    }
+    textPaint.textAlign = Paint.Align.CENTER
+    textPaint.color = cream
+    textPaint.textSize = sp(22f)
+    canvas.drawText(title, width / 2f, dp(48f), textPaint)
+
+    textPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.color = accent
+    smallTextPaint.textSize = sp(10f)
+    canvas.drawText("COINS  " + (viewModel?.coins ?: 0), dp(25f), dp(88f), smallTextPaint)
+
+    boardPaint.color = Color.argb(58, 255, 255, 255)
+    canvas.drawRoundRect(RectF(dp(18f), dp(96f), width - dp(18f), dp(98f)), dp(1f), dp(1f), boardPaint)
+}
 
     private fun drawFooterBack(canvas: Canvas) {
         drawMenuButton(canvas, RectF(dp(30f), height - dp(70f), width - dp(30f), height - dp(20f)), "BACK")
     }
 
     private fun drawLevelMap(canvas: Canvas) {
-        drawSubscreenHeader(canvas, "LEVEL MAP")
-        val unlocked = viewModel?.highestUnlockedLevel ?: 1L
-        val rowH = dp(92f)
-        val mapTop = dp(112f)
+    drawSubscreenHeader(canvas, "LEVEL MAP")
+    val unlocked = viewModel?.highestUnlockedLevel ?: 1L
+    val rowH = dp(92f)
+    val mapTop = dp(112f)
 
-        canvas.save()
-        canvas.clipRect(0f, mapTop, width.toFloat(), height - dp(12f))
-        canvas.translate(0f, -mapScroll)
+    canvas.save()
+    canvas.clipRect(0f, mapTop, width.toFloat(), height - dp(12f))
+    canvas.translate(0f, -mapScroll)
 
-        for (level in 1L..30L) {
-            val index = (level - 1L).toInt()
-            val row = index / 3
-            val col = index % 3
-            val x = width * (0.18f + 0.32f * col)
-            val y = mapTop + rowH * row + dp(42f)
-            val unlockedNow = level <= unlocked
-            val current = level == (viewModel?.currentLevel ?: 1L)
+    outlinePaint.style = Paint.Style.STROKE
+    outlinePaint.strokeWidth = dp(2.2f)
+    outlinePaint.color = Color.argb(90, 255, 219, 120)
 
-            boardPaint.color = if (unlockedNow) Color.rgb(93, 68, 126) else Color.rgb(57, 55, 73)
-            canvas.drawCircle(x, y + dp(4f), dp(23f), boardPaint)
-            boardPaint.color = if (unlockedNow) accent else Color.argb(75, 255, 255, 255)
-            canvas.drawCircle(x, y, dp(if (current) 25f else 22f), boardPaint)
-
-            textPaint.textAlign = Paint.Align.CENTER
-            textPaint.color = if (unlockedNow) backgroundTop else Color.argb(125, 255, 255, 255)
-            textPaint.textSize = sp(13f)
-            canvas.drawText(level.toString(), x, y + dp(5f), textPaint)
-            textPaint.textAlign = Paint.Align.LEFT
-
-            if (current) {
-                outlinePaint.color = Color.argb(235, 255, 248, 195)
-                outlinePaint.strokeWidth = dp(2f)
-                canvas.drawCircle(x, y, dp(31f), outlinePaint)
-            }
-
-            if (unlockedNow) {
-                smallTextPaint.textAlign = Paint.Align.CENTER
-                smallTextPaint.color = Color.argb(145, 255, 245, 222)
-                smallTextPaint.textSize = sp(7f)
-                canvas.drawText("BEST " + (viewModel?.bestScores?.get(level) ?: 0), x, y + dp(38f), smallTextPaint)
-                smallTextPaint.textAlign = Paint.Align.LEFT
-            }
-        }
-        canvas.restore()
+    for (level in 2L..30L) {
+        val prevIndex = (level - 2L).toInt()
+        val currentIndex = (level - 1L).toInt()
+        val prevRow = prevIndex / 3
+        val prevCol = prevIndex % 3
+        val currentRow = currentIndex / 3
+        val currentCol = currentIndex % 3
+        val x1 = width * (0.18f + 0.32f * prevCol)
+        val y1 = mapTop + rowH * prevRow + dp(42f)
+        val x2 = width * (0.18f + 0.32f * currentCol)
+        val y2 = mapTop + rowH * currentRow + dp(42f)
+        outlinePaint.color = if (level <= unlocked + 1L) Color.argb(92, 255, 219, 120) else Color.argb(35, 255, 255, 255)
+        canvas.drawLine(x1, y1, x2, y2, outlinePaint)
     }
+
+    for (level in 1L..30L) {
+        val index = (level - 1L).toInt()
+        val row = index / 3
+        val col = index % 3
+        val x = width * (0.18f + 0.32f * col)
+        val y = mapTop + rowH * row + dp(42f)
+        val unlockedNow = level <= unlocked
+        val current = level == (viewModel?.currentLevel ?: 1L)
+
+        boardPaint.color = if (unlockedNow) Color.rgb(91, 66, 126) else Color.rgb(57, 55, 73)
+        canvas.drawCircle(x, y + dp(4f), dp(25f), boardPaint)
+
+        boardPaint.color = if (unlockedNow) accent else Color.argb(70, 255, 255, 255)
+        canvas.drawCircle(x, y, dp(if (current) 24f else 21f), boardPaint)
+
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = if (unlockedNow) backgroundTop else Color.argb(125, 255, 255, 255)
+        textPaint.textSize = sp(12.5f)
+        canvas.drawText(level.toString(), x, y + dp(5f), textPaint)
+        textPaint.textAlign = Paint.Align.LEFT
+
+        if (current) {
+            outlinePaint.color = Color.argb(235, 255, 248, 195)
+            outlinePaint.strokeWidth = dp(2f)
+            canvas.drawCircle(x, y, dp(31f), outlinePaint)
+        }
+
+        if (unlockedNow) {
+            smallTextPaint.textAlign = Paint.Align.CENTER
+            smallTextPaint.color = Color.argb(145, 255, 245, 222)
+            smallTextPaint.textSize = sp(7f)
+            val best = viewModel?.bestScores?.get(level) ?: 0
+            canvas.drawText(if (best > 0) "BEST  $best" else "UNLOCKED", x, y + dp(38f), smallTextPaint)
+            smallTextPaint.textAlign = Paint.Align.LEFT
+        } else {
+            smallTextPaint.textAlign = Paint.Align.CENTER
+            smallTextPaint.color = Color.argb(75, 255, 255, 255)
+            smallTextPaint.textSize = sp(6.5f)
+            canvas.drawText("LOCKED", x, y + dp(37f), smallTextPaint)
+            smallTextPaint.textAlign = Paint.Align.LEFT
+        }
+    }
+    canvas.restore()
+}
 
     private fun drawPauseOverlay(canvas: Canvas) {
         drawDim(canvas, 175)
@@ -1056,23 +1174,41 @@ class GameView @JvmOverloads constructor(
     }
 
     private fun drawOverlayCard(canvas: Canvas, title: String, detail: String) {
-        rect.set(dp(32f), height / 2f - dp(96f), width - dp(32f), height / 2f + dp(9f))
-        boardPaint.color = Color.rgb(32, 28, 52)
-        canvas.drawRoundRect(rect, dp(28f), dp(28f), boardPaint)
+    rect.set(dp(26f), height / 2f - dp(104f), width - dp(26f), height / 2f + dp(10f))
+    boardPaint.color = Color.argb(80, 0, 0, 0)
+    canvas.drawRoundRect(RectF(rect.left, rect.top + dp(7f), rect.right, rect.bottom + dp(7f)), dp(28f), dp(28f), boardPaint)
 
-        textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = accent
-        textPaint.textSize = sp(25f)
-        canvas.drawText(title, rect.centerX(), rect.top + dp(46f), textPaint)
+    boardPaint.shader = LinearGradient(
+        rect.left, rect.top, rect.right, rect.bottom,
+        Color.rgb(69, 52, 100), Color.rgb(35, 30, 57),
+        Shader.TileMode.CLAMP
+    )
+    canvas.drawRoundRect(rect, dp(28f), dp(28f), boardPaint)
+    boardPaint.shader = null
 
-        smallTextPaint.textAlign = Paint.Align.CENTER
-        smallTextPaint.color = cream
-        smallTextPaint.textSize = sp(10f)
-        canvas.drawText(detail, rect.centerX(), rect.top + dp(73f), smallTextPaint)
+    outlinePaint.color = Color.argb(110, 255, 226, 150)
+    outlinePaint.strokeWidth = dp(1.2f)
+    canvas.drawRoundRect(rect, dp(28f), dp(28f), outlinePaint)
 
-        textPaint.textAlign = Paint.Align.LEFT
-        smallTextPaint.textAlign = Paint.Align.LEFT
-    }
+    textPaint.textAlign = Paint.Align.CENTER
+    textPaint.color = accent
+    textPaint.textSize = sp(24f)
+    canvas.drawText(title, rect.centerX(), rect.top + dp(45f), textPaint)
+
+    smallTextPaint.textAlign = Paint.Align.CENTER
+    smallTextPaint.color = cream
+    smallTextPaint.textSize = sp(9.5f)
+    canvas.drawText(detail, rect.centerX(), rect.top + dp(73f), smallTextPaint)
+
+    boardPaint.color = Color.argb(55, 255, 255, 255)
+    canvas.drawRoundRect(
+        RectF(rect.left + dp(28f), rect.bottom - dp(12f), rect.right - dp(28f), rect.bottom - dp(9f)),
+        dp(2f), dp(2f), boardPaint
+    )
+
+    textPaint.textAlign = Paint.Align.LEFT
+    smallTextPaint.textAlign = Paint.Align.LEFT
+}
 
     private fun drawDim(canvas: Canvas, alpha: Int) {
         boardPaint.color = Color.argb(alpha, 5, 5, 10)
