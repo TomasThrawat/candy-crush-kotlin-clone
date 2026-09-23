@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.view.MotionEvent
 import android.view.VelocityTracker
+import com.tomasthrawat.candycrush.model.Candy
 import com.tomasthrawat.candycrush.model.FallingCandy
 import android.view.View
 import android.view.ViewConfiguration
