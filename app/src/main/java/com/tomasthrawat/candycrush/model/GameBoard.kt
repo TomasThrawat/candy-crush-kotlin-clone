@@ -1,10 +1,10 @@
 package com.tomasthrawat.candycrush.model
 
-private const val UNLIMITED_MOVES = Int.MAX_VALUE
-private const val SCORE_MULTIPLIER = 5
-
 import kotlin.math.abs
 import kotlin.random.Random
+
+private const val UNLIMITED_MOVES = Int.MAX_VALUE
+private const val SCORE_MULTIPLIER = 5
 
 data class FallingCandy(
     val type: Int,
@@ -66,7 +66,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
 
     init { reset() }
 
-    fun reset(moves: Int = 24, target: Int = 650) {
+    fun reset(@Suppress("UNUSED_PARAMETER") moves: Int = 24, target: Int = 650) {
         score = 0
         movesLeft = UNLIMITED_MOVES
         targetScore = target
@@ -91,7 +91,7 @@ class GameBoard(val rows: Int = 8, val cols: Int = 8) {
         return snapshot
     }
 
-    fun restoreTypes(snapshot: IntArray, savedScore: Int, savedMoves: Int, savedTarget: Int) {
+    fun restoreTypes(snapshot: IntArray, savedScore: Int, @Suppress("UNUSED_PARAMETER") savedMoves: Int, savedTarget: Int) {
         if (snapshot.size != rows * cols) {
             reset(UNLIMITED_MOVES, savedTarget.coerceAtLeast(1))
             return
