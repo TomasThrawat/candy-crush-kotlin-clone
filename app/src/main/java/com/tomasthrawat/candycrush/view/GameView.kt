@@ -144,6 +144,11 @@ class GameView @JvmOverloads constructor(
     private var fallingAnimator: ValueAnimator? = null
     private var fallingCandies: List<FallingCandy> = emptyList()
     private var fallingProgress = 0f
+    private var bombAnimator: ValueAnimator? = null
+    private var bombCell: Pair<Int, Int>? = null
+    private var bombProgress = 0f
+    private var explosionCells: List<Pair<Int, Int>> = emptyList()
+    private var explosionProgress = 0f
     private var gameOver = false
     private var levelComplete = false
 
@@ -326,6 +331,14 @@ class GameView @JvmOverloads constructor(
             drawFallingCandies(canvas)
         }
 
+        if (bombAnimator?.isRunning == true) {
+            drawBombCharge(canvas)
+        }
+
+        if (explosionProgress > 0f && explosionCells.isNotEmpty()) {
+            drawBombExplosion(canvas)
+        }
+
         if (successPulse > 0f) {
             drawSparkles(canvas, successPulse)
         }
@@ -424,8 +437,15 @@ class GameView @JvmOverloads constructor(
         canvas.translate(centerX, centerY)
 
         val rect = RectF(-half, -half, half, half)
-        candyPaint.color = palette[type % palette.size]
         candyPaint.shader = null
+
+        if (type == Candy.BOMB_TYPE) {
+            drawBombCandy(canvas, half)
+            canvas.restore()
+            return
+        }
+
+        candyPaint.color = palette[type % palette.size]
 
         when (type) {
             1, 4, 5 -> canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
@@ -470,6 +490,7 @@ class GameView @JvmOverloads constructor(
 
         if (selected) {
             when (type) {
+                Candy.BOMB_TYPE -> canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
                 2 -> canvas.drawPath(diamondPath(half + dp(4f)), selectionPaint)
                 3 -> canvas.drawPath(hexagonPath(half + dp(4f)), selectionPaint)
                 1, 4, 5 -> canvas.drawCircle(0f, 0f, half + dp(4f), selectionPaint)
@@ -491,6 +512,34 @@ class GameView @JvmOverloads constructor(
         }
 
         canvas.restore()
+    }
+
+    private fun drawBombCandy(canvas: Canvas, half: Float) {
+        candyPaint.color = Color.rgb(46, 47, 56)
+        canvas.drawCircle(0f, 0f, half * 0.92f, candyPaint)
+
+        candyEdgePaint.color = Color.rgb(255, 188, 54)
+        candyEdgePaint.strokeWidth = dp(2f)
+        canvas.drawCircle(0f, 0f, half * 0.92f, candyEdgePaint)
+
+        candyPaint.color = Color.rgb(255, 170, 44)
+        canvas.drawCircle(0f, half * 0.12f, half * 0.25f, candyPaint)
+
+        candyPaint.color = Color.WHITE
+        canvas.drawCircle(-half * 0.28f, -half * 0.32f, half * 0.12f, candyPaint)
+
+        candyEdgePaint.color = Color.rgb(255, 221, 120)
+        candyEdgePaint.strokeWidth = dp(2f)
+        val fuse = Path().apply {
+            moveTo(half * 0.16f, -half * 0.72f)
+            cubicTo(
+                half * 0.48f, -half * 0.92f,
+                half * 0.72f, -half * 0.64f,
+                half * 0.56f, -half * 0.36f
+            )
+        }
+        canvas.drawPath(fuse, candyEdgePaint)
+        canvas.drawCircle(half * 0.56f, -half * 0.36f, half * 0.07f, candyEdgePaint)
     }
 
     private fun drawSparkles(canvas: Canvas, progress: Float) {
@@ -912,6 +961,11 @@ class GameView @JvmOverloads constructor(
             return
         }
 
+        if (step.bombCell != null) {
+            startBombCharge(step.bombCell)
+            return
+        }
+
         sound.playMatch()
         fallingCandies = step.fallingCandies
         fallingProgress = 0f
@@ -948,6 +1002,151 @@ class GameView @JvmOverloads constructor(
             })
             start()
         }
+    }
+
+    private fun startBombCharge(cell: Pair<Int, Int>) {
+        bombAnimator?.cancel()
+        bombCell = cell
+        bombProgress = 0f
+        explosionCells = emptyList()
+        explosionProgress = 0f
+
+        bombAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 340L
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+
+            addUpdateListener {
+                bombProgress = it.animatedValue as Float
+                invalidate()
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    bombAnimator = null
+                    val target = bombCell
+                    if (target == null) {
+                        finishBombSequence()
+                        return
+                    }
+
+                    val detonation = board.detonateBomb(target.first, target.second)
+                    bombCell = null
+
+                    if (detonation == null) {
+                        finishBombSequence()
+                        return
+                    }
+
+                    explosionCells = detonation.explosionCells
+                    explosionProgress = 1f
+                    fallingCandies = detonation.fallingCandies
+                    fallingProgress = 0f
+                    sound.playMatch()
+                    startBombExplosionAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    bombAnimator = null
+                    bombCell = null
+                    bombProgress = 0f
+                }
+            })
+            start()
+        }
+    }
+
+    private fun startBombExplosionAnimation() {
+        fallingAnimator?.cancel()
+        fallingAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 560L
+            interpolator = DecelerateInterpolator(1.7f)
+
+            addUpdateListener {
+                fallingProgress = it.animatedValue as Float
+                explosionProgress = (1f - fallingProgress).coerceIn(0f, 1f)
+                invalidate()
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    fallingProgress = 1f
+                    fallingAnimator = null
+                    explosionProgress = 0f
+                    explosionCells = emptyList()
+                    fallingCandies = emptyList()
+                    invalidate()
+                    continueResolutionAnimation()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    fallingAnimator = null
+                    explosionProgress = 0f
+                    explosionCells = emptyList()
+                    fallingCandies = emptyList()
+                    fallingProgress = 0f
+                }
+            })
+            start()
+        }
+    }
+
+    private fun finishBombSequence() {
+        bombAnimator = null
+        bombCell = null
+        bombProgress = 0f
+        explosionCells = emptyList()
+        explosionProgress = 0f
+        fallingCandies = emptyList()
+        fallingProgress = 0f
+        continueResolutionAnimation()
+    }
+
+    private fun drawBombCharge(canvas: Canvas) {
+        val cell = bombCell ?: return
+        val center = cellCenter(cell.first, cell.second)
+        val pulse = 1f +
+            bombProgress * 0.18f +
+            sin(bombProgress * Math.PI * 6.0).toFloat() * 0.04f
+        val radius = cellSize * 0.56f * pulse
+
+        candyEdgePaint.color = Color.argb(
+            ((1f - bombProgress) * 220f).toInt().coerceIn(0, 220),
+            255,
+            180,
+            40
+        )
+        candyEdgePaint.strokeWidth = dp(3f)
+        canvas.drawCircle(center.first, center.second, radius, candyEdgePaint)
+
+        sparklePaint.color = Color.rgb(255, 228, 120)
+        sparklePaint.alpha = ((1f - bombProgress) * 220f).toInt().coerceIn(0, 220)
+        canvas.drawCircle(center.first, center.second, cellSize * 0.1f, sparklePaint)
+        sparklePaint.alpha = 255
+    }
+
+    private fun drawBombExplosion(canvas: Canvas) {
+        val progress = explosionProgress
+
+        for ((row, col) in explosionCells) {
+            val center = cellCenter(row, col)
+            val radius = cellSize * (0.25f + (1f - progress) * 0.78f)
+            val alpha = (progress * 230f).toInt().coerceIn(0, 230)
+
+            candyEdgePaint.color = Color.argb(alpha, 255, 174, 38)
+            candyEdgePaint.strokeWidth = dp(3f)
+            canvas.drawCircle(center.first, center.second, radius, candyEdgePaint)
+
+            sparklePaint.color = Color.rgb(255, 228, 130)
+            sparklePaint.alpha = alpha
+            canvas.drawCircle(
+                center.first,
+                center.second,
+                cellSize * 0.16f * progress,
+                sparklePaint
+            )
+        }
+
+        sparklePaint.alpha = 255
     }
 
     private fun continueResolutionAnimation() {
@@ -1192,11 +1391,17 @@ class GameView @JvmOverloads constructor(
         swapAnimator?.cancel()
         successAnimator?.cancel()
         fallingAnimator?.cancel()
+        bombAnimator?.cancel()
         swapAnimator = null
         successAnimator = null
         fallingAnimator = null
+        bombAnimator = null
         fallingCandies = emptyList()
         fallingProgress = 0f
+        bombCell = null
+        bombProgress = 0f
+        explosionCells = emptyList()
+        explosionProgress = 0f
         successPulse = 0f
         swapProgress = 0f
         clearMovingState()

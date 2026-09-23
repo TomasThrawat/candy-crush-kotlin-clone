@@ -18,6 +18,7 @@ data class Candy(
 
     companion object {
         const val NUM_TYPES = 6
+        const val BOMB_TYPE = NUM_TYPES
 
         val PALETTE = intArrayOf(
             Color.parseColor("#FF3B30"), // red
