@@ -14,14 +14,15 @@ data class Candy(
         const val NUM_TYPES = 6
         const val BOMB_TYPE = NUM_TYPES
         const val ROCKET_TYPE = NUM_TYPES + 1
+        const val COLOR_BOMB_TYPE = NUM_TYPES + 2
 
         val PALETTE = intArrayOf(
-            Color.rgb(195, 51, 134),
-            Color.rgb(76, 166, 163),
-            Color.rgb(71, 128, 168),
-            Color.rgb(242, 163, 111),
-            Color.rgb(85, 219, 75),
-            Color.rgb(248, 229, 102)
+            Color.rgb(255, 79, 163),
+            Color.rgb(54, 201, 194),
+            Color.rgb(76, 141, 255),
+            Color.rgb(255, 154, 77),
+            Color.rgb(99, 212, 85),
+            Color.rgb(255, 216, 77)
         )
     }
 }
